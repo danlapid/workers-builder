@@ -65,13 +65,6 @@ export interface CreateWorkerOptions {
   sourcemap?: boolean;
 
   /**
-   * If true, throw an error when bundling fails instead of falling back to transform-only mode.
-   * Useful for CI/CD pipelines where you want to catch bundling issues early.
-   * @default false
-   */
-  strictBundling?: boolean;
-
-  /**
    * Fetch and install npm dependencies from the npm registry.
    * When enabled, dependencies listed in package.json will be downloaded
    * and added to a virtual node_modules directory before bundling.
