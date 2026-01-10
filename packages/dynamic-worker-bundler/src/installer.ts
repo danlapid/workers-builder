@@ -320,7 +320,7 @@ async function decompress(data: Uint8Array): Promise<Uint8Array> {
   const reader = ds.readable.getReader();
 
   // Write compressed data
-  writer.write(data).catch(() => {});
+  writer.write(data as Uint8Array<ArrayBuffer>).catch(() => {});
   writer.close().catch(() => {});
 
   // Read decompressed data

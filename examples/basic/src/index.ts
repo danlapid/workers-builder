@@ -31,6 +31,7 @@ export default {
           files,
           bundle: true,
           fetchDependencies: true,
+          strictBundling: true,
         });
 
         // Create and run the dynamic worker
@@ -259,11 +260,6 @@ async function fetchGitHubDirectory(
     await Promise.all(
       contents.map(async (item) => {
         if (item.type === 'file' && item.download_url) {
-          // Skip lock files (too large, not needed)
-          if (isLockFile(item.name)) {
-            return;
-          }
-
           const fileResponse = await fetch(item.download_url);
           if (fileResponse.ok) {
             const content = await fileResponse.text();

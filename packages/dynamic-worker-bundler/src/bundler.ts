@@ -1,3 +1,6 @@
+import * as esbuild from 'esbuild-wasm';
+// @ts-expect-error - WASM module import
+import esbuildWasm from './esbuild.wasm';
 import { installDependencies } from './installer.js';
 import { parseImports, resolveModule } from './resolver.js';
 import { getOutputPath, isJavaScriptFile, isTypeScriptFile, transformCode } from './transformer.js';
@@ -58,7 +61,14 @@ export async function createWorker(options: CreateWorkerOptions): Promise<Create
   if (bundle) {
     // Try bundling with esbuild-wasm
     try {
-      const result = await bundleWithEsbuild(files, entryPoint, externals, target, minify, sourcemap);
+      const result = await bundleWithEsbuild(
+        files,
+        entryPoint,
+        externals,
+        target,
+        minify,
+        sourcemap
+      );
 
       // Add install warnings to result
       if (installWarnings.length > 0) {
@@ -67,11 +77,11 @@ export async function createWorker(options: CreateWorkerOptions): Promise<Create
 
       return result;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : String(error);
 
       if (strictBundling) {
         throw new Error(
-          `Bundling failed: ${message}\n\n` +
+          `Bundling failed: ${stack}\n\n` +
             'Hints:\n' +
             '  - Set bundle: false to use transform-only mode\n' +
             '  - Ensure esbuild-wasm is properly initialized\n' +
@@ -82,7 +92,7 @@ export async function createWorker(options: CreateWorkerOptions): Promise<Create
       // If esbuild fails, fall back to transform-only mode
       console.warn(
         '[dynamic-worker-bundler] esbuild bundling failed, falling back to transform-only mode.\n' +
-          `Reason: ${message}\n\n` +
+          `Reason: ${stack}\n\n` +
           'This may happen if:\n' +
           '  - Running in an environment that does not support WASM\n' +
           '  - The esbuild WASM binary could not be loaded\n' +
@@ -444,20 +454,27 @@ async function bundleWithEsbuild(
   minify: boolean,
   sourcemap: boolean
 ): Promise<CreateWorkerResult> {
-  // Dynamic import to avoid issues if esbuild-wasm isn't available
-  const esbuild = await import('esbuild-wasm');
-
-  // Initialize esbuild if not already initialized
-  await initializeEsbuild(esbuild);
+  // Ensure esbuild is initialized (happens lazily on first use)
+  await initializeEsbuild();
 
   const warnings: string[] = [];
 
   // Create a virtual file system plugin for esbuild
-  const virtualFsPlugin: import('esbuild-wasm').Plugin = {
+  const virtualFsPlugin: esbuild.Plugin = {
     name: 'virtual-fs',
     setup(build) {
       // Resolve all paths to our virtual file system
       build.onResolve({ filter: /.*/ }, async (args) => {
+        // Handle entry point - it's passed directly without ./ prefix
+        if (args.kind === 'entry-point') {
+          const normalizedPath = args.path.startsWith('/') ? args.path.slice(1) : args.path;
+          if (normalizedPath in files) {
+            return { path: normalizedPath, namespace: 'virtual' };
+          }
+          // Entry point not found - this will cause a clear error
+          return { path: args.path, namespace: 'virtual' };
+        }
+
         // Handle relative imports
         if (args.path.startsWith('.')) {
           const resolved = resolveRelativePath(args.resolveDir, args.path, files);
@@ -507,7 +524,11 @@ async function bundleWithEsbuild(
         }
 
         const loader = getLoader(args.path);
-        return { contents: content, loader };
+        // Set resolveDir to the directory containing this file
+        // This is critical for resolving relative imports within the file
+        const lastSlash = args.path.lastIndexOf('/');
+        const resolveDir = lastSlash >= 0 ? args.path.slice(0, lastSlash) : '';
+        return { contents: content, loader, resolveDir };
       });
     },
   };
@@ -549,62 +570,53 @@ async function bundleWithEsbuild(
 
 // Track esbuild initialization state
 let esbuildInitialized = false;
+let esbuildInitializePromise: Promise<void> | null = null;
 
-async function initializeEsbuild(esbuild: typeof import('esbuild-wasm')): Promise<void> {
+/**
+ * Initialize the esbuild bundler.
+ * This is called automatically when needed - users don't need to call this directly.
+ */
+async function initializeEsbuild(): Promise<void> {
+  // If already initialized, return immediately
   if (esbuildInitialized) return;
 
-  // Get the version of esbuild-wasm we're using
-  const version = esbuild.version || '0.24.2';
+  // If initialization is in progress, wait for it
+  if (esbuildInitializePromise) {
+    return esbuildInitializePromise;
+  }
+
+  // Start initialization
+  esbuildInitializePromise = (async () => {
+    try {
+      // Initialize esbuild with the pre-compiled WASM module
+      // The WASM module is imported from './esbuild.wasm' which gets bundled with the library
+      // Cloudflare compiles WASM imports at deploy time, giving us a WebAssembly.Module
+      // We only need to instantiate it here, which is allowed at request time
+      await esbuild.initialize({
+        wasmModule: esbuildWasm,
+        worker: false,
+      });
+
+      esbuildInitialized = true;
+    } catch (error) {
+      // If initialization fails, esbuild may already be initialized
+      if (
+        error instanceof Error &&
+        error.message.includes('Cannot call "initialize" more than once')
+      ) {
+        esbuildInitialized = true;
+        return;
+      }
+      throw error;
+    }
+  })();
 
   try {
-    // Fetch the WASM binary ourselves and compile it
-    const wasmUrl = `https://unpkg.com/esbuild-wasm@${version}/esbuild.wasm`;
-    const response = await fetch(wasmUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch esbuild WASM: ${response.status}`);
-    }
-
-    // Get WebAssembly API from globalThis
-    const WA = (globalThis as Record<string, unknown>)['WebAssembly'] as {
-      compileStreaming?: (source: Response) => Promise<unknown>;
-      compile: (bytes: ArrayBuffer) => Promise<unknown>;
-    };
-
-    let wasmModule: unknown;
-
-    // Try compileStreaming first (faster, available in Workers)
-    // Fall back to compile if not available (Node.js/local dev)
-    if (typeof WA.compileStreaming === 'function') {
-      wasmModule = await WA.compileStreaming(response);
-    } else {
-      const buffer = await response.arrayBuffer();
-      wasmModule = await WA.compile(buffer);
-    }
-
-    await esbuild.initialize({
-      wasmModule: wasmModule as never, // Cast to never to satisfy esbuild's Module type
-      worker: false, // Don't use Web Workers (they don't work in CF Workers)
-    });
-    esbuildInitialized = true;
+    await esbuildInitializePromise;
   } catch (error) {
-    // If initialization fails, esbuild may already be initialized
-    if (
-      error instanceof Error &&
-      error.message.includes('Cannot call "initialize" more than once')
-    ) {
-      esbuildInitialized = true;
-      return;
-    }
-
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `Failed to initialize esbuild-wasm: ${message}\n\n` +
-        'This may happen if:\n' +
-        '  - Running in an environment that does not support WASM\n' +
-        '  - The esbuild WASM binary could not be loaded\n' +
-        '  - There is a CSP policy blocking WASM execution\n\n' +
-        'Consider using bundle: false for transform-only mode.'
-    );
+    // Reset promise so caller can try again
+    esbuildInitializePromise = null;
+    throw error;
   }
 }
 
@@ -654,7 +666,7 @@ function resolveRelativePath(
   return undefined;
 }
 
-function getLoader(path: string): import('esbuild-wasm').Loader {
+function getLoader(path: string): esbuild.Loader {
   if (path.endsWith('.ts') || path.endsWith('.mts')) return 'ts';
   if (path.endsWith('.tsx')) return 'tsx';
   if (path.endsWith('.jsx')) return 'jsx';

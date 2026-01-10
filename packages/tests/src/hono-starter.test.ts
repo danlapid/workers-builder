@@ -335,3 +335,42 @@ export default app
     expect(mainContent).toContain('jsx'); // Transformed to jsx() calls
   }, 60000);
 });
+
+// Note: Full bundling tests are skipped in vitest-pool-workers because:
+// 1. The test environment doesn't allow WASM compilation even at module init
+// 2. initializeBundler() must be called at true global scope in a real Worker
+//
+// To test bundling, use the playground (examples/basic) or run in a real Worker.
+// The initializeBundler() API is designed for real Cloudflare Workers deployment.
+describe.skip('Hono Starter Full Bundling', () => {
+  it('should bundle with esbuild-wasm and tree-shake', async () => {
+    const result = await createWorker({
+      files: HONO_STARTER_FILES,
+      bundle: true,
+      strictBundling: true, // Throw if bundling fails - we want to see the error
+      fetchDependencies: true,
+    });
+
+    // Should produce a single bundled file
+    const moduleKeys = Object.keys(result.modules);
+    expect(moduleKeys).toHaveLength(1);
+    expect(result.mainModule).toBe('bundle.js');
+
+    const bundleContent = result.modules['bundle.js'] as string;
+
+    // Bundle should contain Hono class
+    expect(bundleContent).toContain('Hono');
+
+    // Bundle should be smaller than all modules combined (tree-shaking)
+    // Transform-only mode produces ~27 modules
+    // A good bundle should be significantly smaller
+    const bundleSize = bundleContent.length;
+    console.log(`Bundle size: ${(bundleSize / 1024).toFixed(2)} KB`);
+
+    // Bundle should have the app code
+    expect(bundleContent).toContain('Hello Hono!');
+
+    // Should NOT have warnings about missing modules
+    expect(result.warnings).toBeUndefined();
+  }, 120000); // 2 minute timeout for bundling + npm fetch
+});

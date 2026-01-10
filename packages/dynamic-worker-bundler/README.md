@@ -81,6 +81,24 @@ interface CreateWorkerResult {
 }
 ```
 
+### `initializeBundler(options?): Promise<void>`
+
+Initialize the esbuild-wasm bundler. **In Cloudflare Workers, this must be called at global scope** (top level of your worker module) because WebAssembly compilation is only allowed during startup.
+
+```typescript
+import { initializeBundler } from 'dynamic-worker-bundler';
+
+// Call at global scope
+await initializeBundler();
+
+// Optional: provide custom WASM URL or pre-compiled module
+await initializeBundler({
+  wasmURL: 'https://example.com/esbuild.wasm',
+  // OR
+  wasmModule: preCompiledModule,
+});
+```
+
 ### `installDependencies(files, options?): Promise<InstallResult>`
 
 Install npm packages into a virtual `node_modules` directory. This is called automatically when `fetchDependencies: true` in `createWorker()`.
@@ -202,6 +220,31 @@ const worker = await env.LOADER.get('my-worker', async () => ({
 ```
 
 ## Advanced Usage
+
+### Bundling in Cloudflare Workers
+
+To use bundling (`bundle: true`) in Cloudflare Workers, you **must** initialize the bundler at the global scope (top level of your worker module). This is because WebAssembly compilation is only allowed during module initialization, not inside request handlers.
+
+```typescript
+import { createWorker, initializeBundler } from 'dynamic-worker-bundler';
+
+// REQUIRED: Initialize at global scope before handling requests
+await initializeBundler();
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // Now bundling will work in request handlers
+    const { mainModule, modules } = await createWorker({
+      files: { /* ... */ },
+      bundle: true,
+      fetchDependencies: true,
+    });
+    // ...
+  }
+}
+```
+
+If you don't call `initializeBundler()` at global scope, bundling will fail with a WASM compilation error and fall back to transform-only mode (unless `strictBundling: true`).
 
 ### Transform-only Mode
 
