@@ -1,0 +1,17 @@
+{
+  "name": "basic-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler types && wrangler dev",
+    "deploy": "wrangler types && wrangler deploy",
+    "generate-types": "wrangler types"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "wrangler": "^4.0.0"
+  },
+  "dependencies": {
+    "dynamic-worker-bundler": "workspace:*"
+  }
+}

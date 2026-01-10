@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dynamic Worker Bundler Playground</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+        <div>
+          <h1>Dynamic Worker Bundler</h1>
+          <p class="subtitle">Build and run Workers dynamically from source code</p>
+        </div>
+      </div>
+      <div class="status" id="status">
+        <span class="status-dot"></span>
+        <span>Ready</span>
+      </div>
+    </header>
+    
+    <div class="main-grid">
+      <!-- Editor Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            Source Files
+          </span>
+          <div class="header-actions">
+            <select class="examples-select" id="examples">
+              <option value="">Load Example...</option>
+              <option value="simple">Simple Worker</option>
+              <option value="multi-file">Multi-file Worker</option>
+              <option value="json-config">JSON Config</option>
+              <option value="with-env">With Env Bindings</option>
+              <option value="api-router">API Router</option>
+            </select>
+            <button class="btn btn-github" id="importFromGitHub" title="Import from GitHub">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+              </svg>
+              Import from GitHub
+            </button>
+          </div>
+        </div>
+        
+        <div class="file-tabs" id="fileTabs">
+          <button class="add-file-btn" id="addFileBtn" title="Add new file">+</button>
+        </div>
+        
+        <div class="editor-wrapper">
+          <textarea class="code-editor" id="editor" spellcheck="false" placeholder="Select a file or add a new one..."></textarea>
+        </div>
+        
+        <div class="controls">
+          <button class="btn btn-primary" id="runBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            Run Worker
+          </button>
+          <button class="btn btn-secondary" id="formatBtn">Format</button>
+        </div>
+      </div>
+      
+      <!-- Output Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+              <line x1="8" y1="21" x2="16" y2="21"/>
+              <line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+            Output
+          </span>
+        </div>
+        
+        <div class="panel-content" id="output">
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            <p>Click "Run Worker" to bundle and execute your code</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Add File Modal -->
+  <div class="modal-overlay hidden" id="addFileModal">
+    <div class="modal">
+      <h2>Add New File</h2>
+      <input type="text" id="newFileName" placeholder="e.g., src/utils.ts" autofocus>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="cancelAddFile">Cancel</button>
+        <button class="btn btn-primary" id="confirmAddFile">Add File</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GitHub Import Modal -->
+  <div class="modal-overlay hidden" id="githubModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 8px;">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          Import from GitHub
+        </h2>
+        <button class="modal-close" id="closeGithubModal">&times;</button>
+      </div>
+      <p class="modal-description">Paste a GitHub URL to import files from any repository. Supports repos, branches, and subdirectories.</p>
+      <input type="text" id="githubUrl" placeholder="https://github.com/owner/repo/tree/branch/path">
+      <div class="github-examples">
+        <span class="examples-label">Examples:</span>
+        <button class="example-link" data-url="https://github.com/honojs/starter/tree/main/templates/cloudflare-workers">Hono Starter</button>
+        <button class="example-link" data-url="https://github.com/cloudflare/templates/tree/main/hello-world-do-template">Durable Objects</button>
+        <button class="example-link" data-url="https://github.com/cloudflare/templates/tree/main/d1-template">D1 Template</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="cancelGithub">Cancel</button>
+        <button class="btn btn-primary" id="confirmGithub">
+          <span class="btn-text">Import</span>
+          <span class="btn-loading hidden">
+            <span class="spinner"></span>
+            Importing...
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <script src="/app.js"></script>
+</body>
+</html>

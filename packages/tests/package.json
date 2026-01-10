@@ -1,0 +1,20 @@
+{
+  "name": "dynamic-worker-bundler-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "pretest": "wrangler types",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "generate-types": "wrangler types"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.6",
+    "typescript": "^5.7.3",
+    "vitest": "~3.2.0",
+    "wrangler": "^4.0.0"
+  },
+  "dependencies": {
+    "dynamic-worker-bundler": "workspace:*"
+  }
+}

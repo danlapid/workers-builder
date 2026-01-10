@@ -1,0 +1,6 @@
+name = "dynamic-worker-bundler-tests"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+[[worker_loaders]]
+binding = "LOADER"
