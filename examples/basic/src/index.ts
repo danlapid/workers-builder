@@ -26,7 +26,7 @@ export default {
 
         const startTime = Date.now();
 
-        // Bundle the worker with esbuild, fetching dependencies from CDN
+        // Bundle the worker with esbuild, fetching dependencies
         const { mainModule, modules, warnings } = await createWorker({
           files,
           bundle: true,
