@@ -1,6 +1,6 @@
 # dynamic-worker-bundler
 
-Bundle source files for Cloudflare's [Worker Loader binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/worker-loader/) (closed beta). Dynamically spawn Workers at runtime.
+Bundle source files for Cloudflare's [Worker Loader binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/worker-loader/) (closed beta).
 
 ## Installation
 
@@ -8,7 +8,7 @@ Bundle source files for Cloudflare's [Worker Loader binding](https://developers.
 npm install dynamic-worker-bundler
 ```
 
-## Usage
+## Quick Start
 
 ```typescript
 import { createWorker } from 'dynamic-worker-bundler';
@@ -56,33 +56,27 @@ await worker.getEntrypoint().fetch(request);
 ```typescript
 {
   mainModule: string;              // Entry point path
-  modules: Record<string, string>; // All modules
+  modules: Record<string, string>; // All output modules
   wranglerConfig?: {               // Parsed from wrangler.toml/json/jsonc
     main?: string;
     compatibilityDate?: string;
     compatibilityFlags?: string[];
   };
-  warnings?: string[];
+  warnings?: string[];             // Any warnings during bundling
 }
 ```
 
-**Entry point detection order:** `entryPoint` option → wrangler `main` → package.json → defaults (`src/index.ts`, etc.)
+### Entry Point Detection
 
-**`wranglerConfig`:** `undefined` if no config file, `{}` if file exists but empty, or contains parsed fields.
-
-## Features
-
-**TypeScript/JSX** — Transforms `.ts`, `.tsx`, `.jsx` via Sucrase
-
-**npm dependencies** — Auto-installs from registry when `package.json` has dependencies
-
-**Wrangler config** — Parses `wrangler.toml`, `wrangler.json`, or `wrangler.jsonc`
-
-**Bundling** — Uses esbuild-wasm with transform-only fallback
+Priority order:
+1. `entryPoint` option
+2. `main` field in wrangler config
+3. `exports`, `module`, or `main` field in package.json
+4. Default paths: `src/index.ts`, `src/index.js`, `index.ts`, `index.js`
 
 ## Examples
 
-### With Dependencies
+### With npm Dependencies
 
 ```typescript
 const { mainModule, modules } = await createWorker({
@@ -102,10 +96,23 @@ const { mainModule, modules } = await createWorker({
 
 ### Transform-only Mode
 
+Skip bundling to preserve module structure:
+
 ```typescript
 const { mainModule, modules } = await createWorker({
   files: { /* ... */ },
   bundle: false,
+});
+```
+
+### External Modules
+
+Exclude modules from the bundle:
+
+```typescript
+const { mainModule, modules } = await createWorker({
+  files: { /* ... */ },
+  externals: ['cloudflare:workers'],
 });
 ```
 

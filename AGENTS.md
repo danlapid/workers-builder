@@ -19,13 +19,14 @@ pnpm run check      # Lint/format check
 packages/
 ├── dynamic-worker-bundler/   # Main library
 │   └── src/
-│       ├── index.ts          # Public exports
-│       ├── bundler.ts        # Main createWorker() orchestration
+│       ├── index.ts          # createWorker() orchestration + exports
+│       ├── bundler.ts        # esbuild-wasm bundling
 │       ├── config.ts         # Wrangler config parsing
-│       ├── installer.ts      # npm package fetching
+│       ├── installer.ts      # npm package installation
 │       ├── resolver.ts       # Module resolution
-│       ├── transformer.ts    # TypeScript/JSX transform
-│       └── types.ts          # TypeScript interfaces
+│       ├── transformer.ts    # TypeScript/JSX transform + transform-only mode
+│       ├── types.ts          # TypeScript interfaces
+│       └── utils.ts          # Entry point detection
 ├── tests/                    # Vitest + workerd tests
 └── examples/basic/           # Interactive playground
 ```
@@ -35,79 +36,44 @@ packages/
 ```
 createWorker(options)
 │
-├─ parseWranglerConfig()      # Parse wrangler.toml/json/jsonc
+├─ parseWranglerConfig()      # config.ts - Parse wrangler.toml/json/jsonc
 │
-├─ installDependencies()?     # If package.json has dependencies
-│  └─ Fetch from npm registry, extract tarballs
+├─ hasDependencies()?         # installer.ts - Check package.json
+│  └─ installDependencies()   # Fetch from npm, extract tarballs
 │
-├─ detectEntryPoint()         # Priority: option > wrangler main > package.json > defaults
+├─ detectEntryPoint()         # utils.ts - option > wrangler > package.json > defaults
 │
 └─ bundle?
-   ├─ bundleWithEsbuild()     # esbuild-wasm with virtual FS plugin
-   └─ transformAndResolve()   # Fallback: Sucrase transform + import rewriting
+   ├─ bundleWithEsbuild()     # bundler.ts - esbuild-wasm with virtual FS
+   └─ transformAndResolve()   # transformer.ts - Sucrase + import rewriting
 ```
 
 ## Source Files
 
-### bundler.ts
-Main orchestration: `createWorker()`, entry point detection, esbuild bundling, transform fallback.
+| File | Purpose |
+|------|---------|
+| `index.ts` | Main `createWorker()` function, orchestrates the pipeline |
+| `bundler.ts` | esbuild-wasm bundling with virtual filesystem plugin |
+| `config.ts` | Parses wrangler.toml/json/jsonc, extracts compatibility settings |
+| `installer.ts` | Fetches npm packages, resolves semver, extracts tarballs |
+| `resolver.ts` | Node.js-style module resolution, package.json exports field |
+| `transformer.ts` | Sucrase transforms + `transformAndResolve()` for bundle:false mode |
+| `types.ts` | Public TypeScript interfaces |
+| `utils.ts` | `detectEntryPoint()` - entry point detection from various sources |
 
-### config.ts
-Parses `wrangler.toml` (smol-toml), `wrangler.json`, `wrangler.jsonc`. Extracts `main`, `compatibility_date`, `compatibility_flags`.
+## Key Implementation Details
 
-### installer.ts
-Fetches npm packages: metadata lookup, semver resolution, tarball extraction via `DecompressionStream`.
+**esbuild-wasm**: Uses a virtual filesystem plugin to resolve imports from the in-memory `files` object. Initialized lazily on first use.
 
-### transformer.ts
-Sucrase-based TypeScript/JSX transform. Pure JS, no WASM dependency.
+**npm installation**: Fetches package metadata, resolves semver ranges, downloads tarballs, extracts via `DecompressionStream`. Installs dependencies in parallel.
 
-### resolver.ts
-Node.js-style module resolution. Uses `resolve.exports` for package.json exports field.
+**Transform-only mode** (`bundle: false`): Processes files individually with Sucrase, rewrites import paths to match output structure. Used when bundling isn't needed.
 
-## Key Types
-
-```typescript
-interface CreateWorkerOptions {
-  files: Record<string, string>;
-  entryPoint?: string;
-  bundle?: boolean;        // default: true
-  externals?: string[];
-  target?: string;         // default: 'es2022'
-  minify?: boolean;
-  sourcemap?: boolean;
-}
-
-interface WranglerConfig {
-  main?: string;
-  compatibilityDate?: string;
-  compatibilityFlags?: string[];
-}
-
-interface CreateWorkerResult {
-  mainModule: string;
-  modules: Record<string, string | Module>;
-  wranglerConfig?: WranglerConfig;
-  warnings?: string[];
-}
-```
+**nodejs_compat**: When wrangler config has `nodejs_compat` flag, esbuild uses `platform: 'node'` instead of `platform: 'browser'`.
 
 ## Testing
 
 Tests run in workerd via `@cloudflare/vitest-pool-workers`:
 
 - `bundler.test.ts` — Unit tests for transform, resolution, config parsing
-- `hono-starter.test.ts` — E2E tests with real npm dependencies
-
-
-## Public Exports
-
-```typescript
-export { createWorker } from './bundler.js';
-export type {
-  CreateWorkerOptions,
-  CreateWorkerResult,
-  Files,
-  Modules,
-  WranglerConfig
-} from './types.js';
-```
+- `hono-starter.test.ts` — E2E tests with real npm dependencies (Hono)
