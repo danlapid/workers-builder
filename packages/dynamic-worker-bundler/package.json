@@ -18,13 +18,13 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/node": "^22.15.18",
-    "typescript": "^5.7.3"
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
   },
   "dependencies": {
-    "esbuild-wasm": "^0.24.2",
-    "resolve.exports": "^2.0.3",
-    "sucrase": "^3.35.1"
+    "esbuild-wasm": "^0.27.0",
+    "resolve.exports": "^2.0.0",
+    "sucrase": "^3.0.0"
   },
   "engines": {
     "node": ">=22"
