@@ -1,8 +1,7 @@
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
-import { copyFileSync, mkdirSync, existsSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -20,22 +19,6 @@ function findWasmFile() {
     if (existsSync(p)) return p;
   }
 
-  // Try to find it using find command
-  try {
-    const found = execSync(
-      'find ../../node_modules -name "esbuild.wasm" -type f 2>/dev/null | head -1',
-      {
-        cwd: __dirname,
-        encoding: 'utf-8',
-      }
-    ).trim();
-    if (found && existsSync(join(__dirname, found))) {
-      return join(__dirname, found);
-    }
-  } catch {
-    // Ignore
-  }
-
   return null;
 }
 
@@ -48,7 +31,6 @@ if (!wasmSource) {
 // Copy WASM file to dist/
 const wasmDest = join(__dirname, 'dist/esbuild.wasm');
 copyFileSync(wasmSource, wasmDest);
-console.log(`Copied esbuild.wasm to dist/`);
 
 // Build the library - keep the WASM import as external
 // so it's resolved relative to the output file
@@ -67,7 +49,7 @@ await esbuild.build({
       name: 'wasm-external',
       setup(build) {
         // Rewrite the WASM import to be relative to output
-        build.onResolve({ filter: /\.wasm$/ }, (args) => {
+        build.onResolve({ filter: /\.wasm$/ }, () => {
           return {
             path: './esbuild.wasm',
             external: true,
@@ -77,5 +59,3 @@ await esbuild.build({
     },
   ],
 });
-
-console.log('Build complete!');

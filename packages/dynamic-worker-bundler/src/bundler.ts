@@ -33,17 +33,9 @@ export async function createWorker(options: CreateWorkerOptions): Promise<Create
   // If fetchDependencies is enabled, install npm dependencies first
   const installWarnings: string[] = [];
   if (fetchDependencies) {
-    const installResult = await installDependencies(files, {
-      onProgress: (msg) => console.log(`[dynamic-worker-bundler] ${msg}`),
-    });
+    const installResult = await installDependencies(files);
     files = installResult.files;
     installWarnings.push(...installResult.warnings);
-
-    if (installResult.installed.length > 0) {
-      console.log(
-        `[dynamic-worker-bundler] Installed ${installResult.installed.length} packages: ${installResult.installed.join(', ')}`
-      );
-    }
   }
 
   // Detect entry point

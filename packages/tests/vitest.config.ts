@@ -6,7 +6,7 @@ export default defineWorkersConfig({
       optimizer: {
         ssr: {
           enabled: true,
-          include: ["dynamic-worker-bundler"],
+          include: ['dynamic-worker-bundler'],
         },
       },
     },

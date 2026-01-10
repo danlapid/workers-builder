@@ -278,13 +278,3 @@ async function fetchGitHubDirectory(
   await fetchDir(basePath);
   return files;
 }
-
-// Only skip lock files (they're huge and not needed for bundling)
-function isLockFile(filename: string): boolean {
-  return (
-    filename === 'package-lock.json' ||
-    filename === 'pnpm-lock.yaml' ||
-    filename === 'yarn.lock' ||
-    filename === 'bun.lockb'
-  );
-}
