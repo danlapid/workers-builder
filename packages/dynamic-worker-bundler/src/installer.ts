@@ -112,11 +112,23 @@ export async function installDependencies(
 
   // Track installed packages to avoid duplicates
   const installedPackages = new Map<string, string>(); // name -> version
+  // Track in-progress installations to avoid duplicate work
+  const inProgress = new Map<string, Promise<void>>();
 
-  // Install each dependency (and its transitive deps)
-  for (const [name, versionRange] of Object.entries(depsToInstall)) {
-    await installPackage(name, versionRange, result, installedPackages, registry, onProgress);
-  }
+  // Install all dependencies in parallel
+  await Promise.all(
+    Object.entries(depsToInstall).map(([name, versionRange]) =>
+      installPackage(
+        name,
+        versionRange,
+        result,
+        installedPackages,
+        inProgress,
+        registry,
+        onProgress
+      )
+    )
+  );
 
   return result;
 }
@@ -129,6 +141,7 @@ async function installPackage(
   versionRange: string,
   result: InstallResult,
   installedPackages: Map<string, string>,
+  inProgress: Map<string, Promise<void>>,
   registry: string,
   onProgress?: (message: string) => void
 ): Promise<void> {
@@ -137,44 +150,72 @@ async function installPackage(
     return;
   }
 
+  // If installation is already in progress, wait for it
+  const existing = inProgress.get(name);
+  if (existing) {
+    return existing;
+  }
+
+  // Create the installation promise
+  const installPromise = (async () => {
+    try {
+      // Fetch package metadata from registry
+      const metadata = await fetchPackageMetadata(name, registry);
+
+      // Resolve version from range
+      const version = resolveVersion(versionRange, metadata);
+      if (!version) {
+        result.warnings.push(`Could not resolve version for ${name}@${versionRange}`);
+        return;
+      }
+
+      // Get the specific version metadata
+      const versionMetadata = metadata.versions[version];
+      if (!versionMetadata) {
+        result.warnings.push(`Version ${version} not found for ${name}`);
+        return;
+      }
+
+      // Mark as installed (before fetching to prevent cycles)
+      installedPackages.set(name, version);
+      result.installed.push(`${name}@${version}`);
+
+      // Fetch and extract the package tarball
+      const packageFiles = await fetchPackageFiles(name, versionMetadata, registry);
+
+      // Add files to node_modules
+      for (const [filePath, content] of Object.entries(packageFiles)) {
+        result.files[`node_modules/${name}/${filePath}`] = content;
+      }
+
+      // Install dependencies in parallel
+      const deps = versionMetadata.dependencies ?? {};
+      await Promise.all(
+        Object.entries(deps).map(([depName, depVersion]) =>
+          installPackage(
+            depName,
+            depVersion,
+            result,
+            installedPackages,
+            inProgress,
+            registry,
+            onProgress
+          )
+        )
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      result.warnings.push(`Failed to install ${name}: ${message}`);
+    }
+  })();
+
+  // Track in progress
+  inProgress.set(name, installPromise);
+
   try {
-    // Fetch package metadata from registry
-    const metadata = await fetchPackageMetadata(name, registry);
-
-    // Resolve version from range
-    const version = resolveVersion(versionRange, metadata);
-    if (!version) {
-      result.warnings.push(`Could not resolve version for ${name}@${versionRange}`);
-      return;
-    }
-
-    // Get the specific version metadata
-    const versionMetadata = metadata.versions[version];
-    if (!versionMetadata) {
-      result.warnings.push(`Version ${version} not found for ${name}`);
-      return;
-    }
-
-    // Mark as installed (before fetching to prevent cycles)
-    installedPackages.set(name, version);
-    result.installed.push(`${name}@${version}`);
-
-    // Fetch and extract the package tarball
-    const packageFiles = await fetchPackageFiles(name, versionMetadata, registry);
-
-    // Add files to node_modules
-    for (const [filePath, content] of Object.entries(packageFiles)) {
-      result.files[`node_modules/${name}/${filePath}`] = content;
-    }
-
-    // Install dependencies recursively
-    const deps = versionMetadata.dependencies ?? {};
-    for (const [depName, depVersion] of Object.entries(deps)) {
-      await installPackage(depName, depVersion, result, installedPackages, registry, onProgress);
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    result.warnings.push(`Failed to install ${name}: ${message}`);
+    await installPromise;
+  } finally {
+    inProgress.delete(name);
   }
 }
 
