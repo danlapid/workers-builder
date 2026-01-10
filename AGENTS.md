@@ -18,9 +18,10 @@ dynamic-worker-bundler/
 │   │   ├── src/
 │   │   │   ├── index.ts            # Public exports
 │   │   │   ├── bundler.ts          # Main createWorker() function
+│   │   │   ├── installer.ts        # npm package installer (fetches from registry)
 │   │   │   ├── transformer.ts      # TypeScript/JSX transformation (Sucrase)
 │   │   │   ├── resolver.ts         # Module resolution & import parsing
-│   │   │   ├── fetcher.ts          # CDN fetching from esm.sh
+│   │   │   ├── fetcher.ts          # Legacy CDN utilities (esm.sh)
 │   │   │   └── types.ts            # TypeScript interfaces
 │   │   ├── dist/                   # Built output (gitignored)
 │   │   ├── package.json
@@ -30,7 +31,9 @@ dynamic-worker-bundler/
 │   └── tests/                      # Test package
 │       ├── src/
 │       │   ├── index.ts            # Empty worker entry (required by vitest)
-│       │   └── bundler.test.ts     # All tests
+│       │   ├── bundler.test.ts     # Unit tests
+│       │   ├── integration.test.ts # Integration tests (GitHub + npm)
+│       │   └── e2e.test.ts         # End-to-end tests (requires playground)
 │       ├── wrangler.toml
 │       ├── vitest.config.ts
 │       └── package.json
@@ -42,7 +45,7 @@ dynamic-worker-bundler/
 │       │   ├── styles.css          # Catppuccin-themed dark mode
 │       │   └── app.js              # Frontend JavaScript
 │       ├── src/
-│       │   └── index.ts            # Worker: serves assets + /api/run
+│       │   └── index.ts            # Worker: serves assets + API endpoints
 │       ├── wrangler.jsonc
 │       └── package.json
 │
@@ -74,9 +77,10 @@ The Worker Loader binding (Cloudflare closed beta) allows creating Workers dynam
 // The binding expects this format:
 const worker = env.LOADER.get('worker-name', async () => ({
   mainModule: 'src/index.js',           // Entry point path
-  modules: {                             // All modules
+  modules: {                             // All modules as key-value pairs
     'src/index.js': 'export default {...}',
     'src/utils.js': 'export function...',
+    'node_modules/hono/dist/index.js': '...',
   },
   compatibilityDate: '2025-01-01',
   env: { /* optional bindings */ },
@@ -91,10 +95,10 @@ const response = await worker.getEntrypoint().fetch(request);
 `createWorker()` takes source files (TypeScript, JSX, etc.) and:
 
 1. **Detects entry point** from `package.json` or defaults to `src/index.ts`
-2. **Transforms TypeScript/JSX** to JavaScript using Sucrase
-3. **Resolves and rewrites imports** to match Worker Loader's expected paths
-4. **Optionally bundles** everything with esbuild-wasm
-5. **Optionally fetches npm dependencies** from esm.sh CDN
+2. **Installs npm dependencies** (if `fetchDependencies: true`) - downloads packages from npm registry
+3. **Transforms TypeScript/JSX** to JavaScript using Sucrase
+4. **Resolves and rewrites imports** to match Worker Loader's expected paths
+5. **Optionally bundles** everything with esbuild-wasm into a single file
 
 ```typescript
 import { createWorker } from 'dynamic-worker-bundler';
@@ -102,18 +106,43 @@ import { createWorker } from 'dynamic-worker-bundler';
 const { mainModule, modules, warnings } = await createWorker({
   files: {
     'src/index.ts': `
-      import { greet } from './utils';
-      export default { fetch: () => new Response(greet('World')) }
+      import { Hono } from 'hono';
+      const app = new Hono();
+      app.get('/', (c) => c.text('Hello Hono!'));
+      export default app;
     `,
-    'src/utils.ts': `export function greet(name: string) { return 'Hello ' + name; }`,
-    'package.json': JSON.stringify({ main: 'src/index.ts' }),
+    'package.json': JSON.stringify({
+      main: 'src/index.ts',
+      dependencies: { 'hono': '^4.0.0' }
+    }),
   },
-  bundle: false,           // true = use esbuild-wasm to bundle
-  strictBundling: false,   // true = throw on bundle failure
-  fetchDependencies: false, // true = fetch npm packages from CDN
-  cdnUrl: 'https://esm.sh',
+  fetchDependencies: true,  // Install npm packages from registry
+  bundle: false,            // false = keep separate modules (works in transform-only mode)
 });
+
+// Result:
+// mainModule: 'src/index.js'
+// modules: {
+//   'src/index.js': '...',
+//   'node_modules/hono/dist/index.js': '...',
+//   'node_modules/hono/dist/hono.js': '...',
+//   ... (26+ hono modules)
+// }
 ```
+
+## How Dependency Installation Works
+
+When `fetchDependencies: true`, the library performs an npm-install-like operation:
+
+1. **Read `package.json`** from the virtual files to get `dependencies`
+2. **Fetch package metadata** from npm registry (`registry.npmjs.org`)
+3. **Resolve semver versions** (handles `^`, `~`, `>=`, exact versions, dist-tags)
+4. **Download tarballs** (`.tgz` files) from npm
+5. **Extract packages** using `DecompressionStream` (gzip) and custom tar parser
+6. **Handle transitive dependencies** recursively
+7. **Populate virtual `node_modules/`** with extracted files
+
+This is similar to running `npm install` but operates entirely in memory with a virtual file system.
 
 ## Dependencies
 
@@ -177,8 +206,26 @@ pnpm ci:publish           # Used by CI (OIDC publishing)
 2. **Transform mode** (`bundle: false`): Transforms each file individually, keeps separate modules
 
 **Fallback behavior:**
-- If `bundle: true` but esbuild fails, it falls back to transform mode (with warning)
+- If `bundle: true` but esbuild fails (e.g., WASM can't initialize), it falls back to transform mode (with warning)
 - Use `strictBundling: true` to throw instead of falling back
+- Transform mode works reliably in all environments
+
+### `installer.ts` - npm Package Installer
+
+Fetches and extracts npm packages into a virtual `node_modules/` directory.
+
+**Key functions:**
+- `installDependencies(files, options)` - Main install function
+- `fetchPackageMetadata(name, registry)` - Get package info from npm
+- `resolveVersion(range, metadata)` - Resolve semver range to specific version
+- `fetchPackageFiles(name, metadata)` - Download and extract tarball
+- `extractTarball(data)` - Decompress gzip and parse tar archive
+
+**Flow:**
+```
+package.json → parse dependencies → fetch metadata → resolve versions
+    → download tarballs → extract to node_modules/ → process transitive deps
+```
 
 ### `transformer.ts` - TypeScript/JSX Transformation
 
@@ -199,22 +246,20 @@ Uses **Sucrase** for fast transformation:
 
 Handles Node.js-style module resolution:
 - Relative imports (`./utils`, `../lib`)
+- Bare imports (`hono`, `lodash/debounce`)
 - package.json exports field (via `resolve.exports`)
 - Extension resolution (`.ts`, `.tsx`, `.js`, etc.)
 - Index file resolution (`./utils` -> `./utils/index.ts`)
+- node_modules resolution (`hono` -> `node_modules/hono/dist/index.js`)
 
 **Key functions:**
 - `resolveModule(specifier, options)` - Main resolution function
 - `parseImports(code)` - Regex-based import parsing (sync)
 - `parseImportsAsync(code)` - es-module-lexer parsing (async, faster)
 
-### `fetcher.ts` - CDN Fetching
+### `fetcher.ts` - Legacy CDN Utilities
 
-Fetches npm packages from esm.sh CDN when `fetchDependencies: true`:
-
-```typescript
-const { code, finalUrl } = await fetchFromCDN('lodash', 'https://esm.sh');
-```
+Contains utilities for esm.sh CDN (legacy, not used in main flow):
 
 **Key functions:**
 - `fetchFromCDN(specifier, cdnUrl)` - Fetch package from CDN
@@ -235,8 +280,7 @@ interface CreateWorkerOptions {
   minify?: boolean;           // default: false
   sourcemap?: boolean;        // default: false
   strictBundling?: boolean;   // default: false
-  fetchDependencies?: boolean; // default: false
-  cdnUrl?: string;            // default: 'https://esm.sh'
+  fetchDependencies?: boolean; // default: false (install npm packages)
 }
 
 interface CreateWorkerResult {
@@ -248,11 +292,19 @@ interface CreateWorkerResult {
 
 ## Testing
 
-Tests are in `packages/tests/src/bundler.test.ts` using Vitest with `@cloudflare/vitest-pool-workers`.
+Tests are in `packages/tests/src/` using Vitest with `@cloudflare/vitest-pool-workers`.
 
-**Current test status:** 28 passing, 3 skipped
+**Test files:**
+- `bundler.test.ts` - Unit tests for transform, parse, resolve functions
+- `integration.test.ts` - GitHub import + npm install tests
+- `e2e.test.ts` - End-to-end tests (requires playground running)
 
-**Skipped tests:** `parseImportsAsync` tests are skipped because es-module-lexer requires WASM compilation, which is not available in the workerd test environment. The function works correctly in production.
+**Current test status:** 36 passing, 10 skipped
+
+**Skipped tests:**
+- `parseImportsAsync` - es-module-lexer requires WASM compilation (not available in workerd tests)
+- `bundleWithEsbuild` integration - esbuild-wasm can't initialize in workerd tests
+- E2E tests - Require playground to be running
 
 **Test coverage:**
 - `transformCode` - TypeScript/JSX transformation
@@ -260,7 +312,8 @@ Tests are in `packages/tests/src/bundler.test.ts` using Vitest with `@cloudflare
 - `resolveModule` - Module resolution
 - `createWorker` - Full pipeline (multi-file, imports, paths)
 - `parsePackageSpecifier` - Package specifier parsing
-- `resolveEsmShImports` - CDN import resolution
+- `installDependencies` - npm package installation
+- GitHub import - Fetching files from GitHub repos
 
 ## CI/CD
 
@@ -298,31 +351,47 @@ Run `pnpm run generate-types` to regenerate types.
 A web-based playground for testing the library:
 
 **Features:**
-- Monaco-style code editor (simple textarea)
-- File tabs (add/remove files)
-- 5 pre-built examples
-- **GitHub Templates integration** - Load templates directly from `cloudflare/templates` repository
-- Run button that bundles and executes via `/api/run`
+- Code editor with file tabs
+- 5 pre-built examples (simple, multi-file, json-config, with-env, api-router)
+- **GitHub Import** - Import from any GitHub repository URL
+- Run button that installs deps, bundles, and executes via Worker Loader
 - Output panel showing response, bundle info, warnings
 
-**GitHub Templates Integration:**
-- Click "GitHub" button to browse available templates
-- Templates are fetched from https://github.com/cloudflare/templates
-- Search and filter templates by name
-- ALL files from the template are downloaded (except lock files)
-- npm dependencies are automatically fetched from esm.sh CDN
-- esbuild bundles everything into a single file with tree-shaking
+**GitHub Import:**
+- Click "Import from GitHub" button
+- Paste any GitHub URL (repo, branch, or subdirectory)
+- Example: `https://github.com/honojs/starter/tree/main/templates/cloudflare-workers`
+- All files are fetched (except lock files)
+- npm dependencies are automatically installed from registry
 
 **API Endpoints:**
-- `GET /api/templates` - List all available templates from cloudflare/templates
-- `GET /api/templates/:name` - Fetch ALL files from a specific template
-- `POST /api/run` - Bundle (with `bundle: true`, `fetchDependencies: true`) and execute worker code
+- `POST /api/github` - Import files from any GitHub URL
+- `POST /api/run` - Install deps, bundle, and execute worker code
 
-**Architecture:**
-- Uses Workers Static Assets to serve HTML/CSS/JS from `public/`
-- Worker handles API endpoints and creates dynamic workers using Worker Loader binding
-- Templates are fetched via GitHub API with 5-minute caching
-- `createWorker()` uses esbuild-wasm to bundle all code + dependencies into a single `bundle.js`
+**How `/api/run` works:**
+```typescript
+// 1. Install npm dependencies
+const { files: filesWithDeps } = await installDependencies(files);
+
+// 2. Bundle with transform-only mode (esbuild fallback)
+const { mainModule, modules } = await createWorker({
+  files: filesWithDeps,
+  bundle: true,
+  fetchDependencies: true,  // Already installed, but enables the flow
+});
+
+// 3. Create dynamic worker via Worker Loader
+const worker = env.LOADER.get(`worker-v${version}`, async () => ({
+  mainModule,
+  modules,
+  compatibilityDate: '2025-01-01',
+  env: {},
+  globalOutbound: null,
+}));
+
+// 4. Execute and return response
+const response = await worker.getEntrypoint().fetch(request);
+```
 
 **Wrangler config:**
 ```jsonc
@@ -334,10 +403,11 @@ A web-based playground for testing the library:
 
 ## Known Limitations
 
-1. **esbuild-wasm in Workers** - WASM initialization can fail in some environments; library falls back gracefully
+1. **esbuild-wasm in Workers** - WASM initialization can fail in wrangler dev; library falls back to transform-only mode gracefully
 2. **es-module-lexer WASM** - Doesn't work in workerd test environment; regex fallback is used
-3. **No Node.js built-ins** - Worker runtime doesn't have Node.js APIs
-4. **CDN latency** - `fetchDependencies` adds network latency for first fetch
+3. **No Node.js built-ins** - Worker runtime doesn't have Node.js APIs (fs, path, etc.)
+4. **npm registry latency** - `fetchDependencies` adds network latency for first fetch
+5. **Large packages** - Very large npm packages may hit memory limits
 
 ## Common Tasks
 
@@ -345,7 +415,7 @@ A web-based playground for testing the library:
 
 1. Modify source in `packages/dynamic-worker-bundler/src/`
 2. Export from `index.ts` if public
-3. Add tests in `packages/tests/src/bundler.test.ts`
+3. Add tests in `packages/tests/src/`
 4. Run `pnpm test` to verify
 5. Create changeset: `pnpm changeset`
 
@@ -381,11 +451,15 @@ const EXAMPLES = {
 
 ### `createWorker(options): Promise<CreateWorkerResult>`
 
-Main function. See `types.ts` for full options.
+Main function. Takes source files, installs dependencies (optional), transforms, and bundles.
+
+### `installDependencies(files, options?): Promise<InstallResult>`
+
+Install npm packages into virtual node_modules. Called automatically when `fetchDependencies: true`.
 
 ### `transformCode(code, options): TransformResult`
 
-Transform TypeScript/JSX to JavaScript.
+Transform TypeScript/JSX to JavaScript using Sucrase.
 
 ### `parseImports(code): string[]`
 
@@ -397,29 +471,60 @@ Parse imports using es-module-lexer (async, faster).
 
 ### `resolveModule(specifier, options): ResolveResult`
 
-Resolve import specifier to file path.
+Resolve import specifier to file path in virtual file system.
 
 ### `fetchFromCDN(specifier, cdnUrl?): Promise<FetchResult>`
 
-Fetch npm package from esm.sh CDN.
+Legacy: Fetch npm package from esm.sh CDN.
 
 ### `parsePackageSpecifier(specifier): { name, version?, subpath? }`
 
 Parse package specifier into components.
 
-### `resolveEsmShImports(code, cdnUrl?): string`
-
-Resolve esm.sh relative imports to absolute URLs.
-
 ## Debugging Tips
 
 1. **Bundling fails silently** - Set `strictBundling: true` to get error details
 2. **Import not found** - Check `warnings` array in result
-3. **Type errors** - Run `pnpm run generate-types` then `pnpm run typecheck`
-4. **Test failures** - Run `pnpm test` (builds automatically)
+3. **npm install fails** - Check console for "Installing..." and "Failed to install" messages
+4. **Type errors** - Run `pnpm run generate-types` then `pnpm run typecheck`
+5. **Test failures** - Run `pnpm test` (builds automatically)
 
 ## Environment Requirements
 
 - Node.js >= 22
 - pnpm (version 10 recommended)
 - For playground: Cloudflare account with Worker Loader access (closed beta)
+
+## Architecture Decisions
+
+### Why npm registry instead of esm.sh?
+
+Initially, we tried using esm.sh CDN for fetching dependencies. However, this approach had problems:
+
+1. esm.sh returns code with relative imports to other esm.sh URLs
+2. Transitive dependencies need to be fetched and bundled
+3. This only works with esbuild bundling (which requires WASM)
+4. WASM can't initialize reliably in all environments
+
+**Solution:** Fetch packages directly from npm registry, similar to `npm install`:
+- Get the actual npm package structure with proper `exports`/`main` fields
+- Transitive dependencies resolved via each package's `package.json`
+- Works in transform-only mode (no WASM required)
+- No weird URL imports to handle
+
+### Why transform-only mode as fallback?
+
+esbuild-wasm requires WASM compilation, which can fail in:
+- wrangler dev local environment
+- Some restricted Worker environments
+- Test runners (vitest-pool-workers)
+
+Transform-only mode uses Sucrase (pure JavaScript) and works everywhere. It produces multiple modules instead of a single bundle, but Worker Loader handles this fine.
+
+### Why virtual file system?
+
+The library operates on a `Files` object (`Record<string, string>`) instead of real files because:
+- Worker Loader expects modules as strings
+- Users may provide code from various sources (GitHub, databases, user input)
+- Enables running in Workers without file system access
+- Simplifies testing

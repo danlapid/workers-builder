@@ -41,7 +41,7 @@ const response = await worker.fetch(request);
 - **Module resolution** - Resolves imports using Node.js resolution algorithm with `package.json` exports field support
 - **Import rewriting** - Rewrites relative imports to match Worker Loader's expected module paths
 - **Optional bundling** - Bundle all dependencies into a single file using [esbuild-wasm](https://esbuild.github.io/)
-- **NPM dependency fetching** - Fetch npm packages from [esm.sh](https://esm.sh) CDN at runtime
+- **NPM dependency installation** - Fetch and install npm packages from the registry at runtime
 
 ## API
 
@@ -61,8 +61,7 @@ The main function that transforms source files into the Worker Loader format.
 | `minify` | `boolean` | `false` | Minify the output |
 | `sourcemap` | `boolean` | `false` | Generate source maps |
 | `strictBundling` | `boolean` | `false` | Throw error if bundling fails instead of falling back to transform-only mode |
-| `fetchDependencies` | `boolean` | `false` | Fetch missing npm dependencies from CDN |
-| `cdnUrl` | `string` | `'https://esm.sh'` | Custom CDN URL for fetching dependencies |
+| `fetchDependencies` | `boolean` | `false` | Install npm dependencies from registry before bundling |
 
 #### Result
 
@@ -72,6 +71,24 @@ interface CreateWorkerResult {
   modules: Modules;        // All modules in the bundle
   warnings?: string[];     // Any warnings generated during bundling
 }
+```
+
+### `installDependencies(files, options?): Promise<InstallResult>`
+
+Install npm packages into a virtual `node_modules` directory. This is called automatically when `fetchDependencies: true` in `createWorker()`.
+
+```typescript
+import { installDependencies } from 'dynamic-worker-bundler';
+
+const { files, installed, warnings } = await installDependencies({
+  'package.json': JSON.stringify({
+    dependencies: { 'hono': '^4.0.0' }
+  }),
+  'src/index.ts': '...',
+});
+
+// files now includes node_modules/hono/...
+// installed = ['hono@4.11.3']
 ```
 
 ## Examples
@@ -114,7 +131,7 @@ const { mainModule, modules } = await createWorker({
 });
 ```
 
-### Fetching NPM Dependencies
+### Using NPM Dependencies
 
 ```typescript
 const { mainModule, modules } = await createWorker({
@@ -125,11 +142,19 @@ const { mainModule, modules } = await createWorker({
       app.get('/', (c) => c.text('Hello Hono!'));
       export default app;
     `,
-    'package.json': JSON.stringify({ main: 'src/index.ts' }),
+    'package.json': JSON.stringify({
+      main: 'src/index.ts',
+      dependencies: { 'hono': '^4.0.0' }
+    }),
   },
-  fetchDependencies: true,  // Fetches 'hono' from esm.sh
-  bundle: false,            // Don't bundle, keep separate modules
+  fetchDependencies: true,  // Downloads hono from npm registry
 });
+
+// modules will include:
+// - 'src/index.js' (transformed)
+// - 'node_modules/hono/dist/index.js'
+// - 'node_modules/hono/dist/hono.js'
+// - ... (all hono modules)
 ```
 
 ### With Environment Variables
@@ -161,7 +186,7 @@ const worker = await env.LOADER.get('my-worker', async () => ({
   mainModule,
   modules,
   compatibilityDate: '2025-01-01',
-  bindings: {
+  env: {
     API_KEY: 'secret-key',
     KV: env.MY_KV_NAMESPACE,
   },
@@ -182,6 +207,8 @@ const result = await createWorker({
 });
 ```
 
+In transform-only mode, each file is transformed individually and all modules are kept separate. This works well with `fetchDependencies: true` since npm packages are extracted to `node_modules` with their original structure.
+
 ### Using Lower-level APIs
 
 The library exports lower-level functions for more control:
@@ -191,13 +218,12 @@ import {
   transformCode,
   parseImports,
   resolveModule,
-  fetchFromCDN,
+  installDependencies,
 } from 'dynamic-worker-bundler';
 
 // Transform TypeScript/JSX
 const { code, sourceMap } = transformCode('const x: number = 1;', {
   filePath: 'file.ts',
-  transforms: ['typescript'],
 });
 
 // Parse imports from code
@@ -209,9 +235,9 @@ const resolved = resolveModule('./utils', {
   importer: 'index.ts',
 });
 
-// Fetch from CDN
-const { code: fetchedCode, resolvedUrl } = await fetchFromCDN('lodash-es', {
-  cdnUrl: 'https://esm.sh',
+// Install npm packages
+const { files, installed } = await installDependencies({
+  'package.json': JSON.stringify({ dependencies: { lodash: '^4.0.0' } }),
 });
 ```
 
@@ -243,6 +269,7 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const { mainModule, modules } = await createWorker({
       files: { /* ... */ },
+      fetchDependencies: true,
     });
     
     const worker = await env.LOADER.get('worker-name', async () => ({
@@ -251,7 +278,7 @@ export default {
       compatibilityDate: '2025-01-01',
     }));
     
-    return worker.fetch(request);
+    return worker.getEntrypoint().fetch(request);
   }
 }
 ```
@@ -259,16 +286,31 @@ export default {
 ## How It Works
 
 1. **Entry Point Detection** - Finds the entry point from `package.json` main/module fields or defaults to `src/index.ts`
-2. **Transformation** - Transforms TypeScript/JSX files to JavaScript using Sucrase
-3. **Import Resolution** - Resolves and rewrites imports to absolute paths
-4. **Bundling** (optional) - Bundles all dependencies using esbuild-wasm
-5. **Module Formatting** - Outputs modules in the format expected by Worker Loader
+2. **Dependency Installation** (if `fetchDependencies: true`) - Downloads packages from npm registry and populates virtual `node_modules`
+3. **Transformation** - Transforms TypeScript/JSX files to JavaScript using Sucrase
+4. **Import Resolution** - Resolves and rewrites imports to absolute paths
+5. **Bundling** (optional) - Bundles all dependencies using esbuild-wasm
+6. **Module Formatting** - Outputs modules in the format expected by Worker Loader
+
+## How Dependency Installation Works
+
+When `fetchDependencies: true`:
+
+1. Reads `package.json` from the virtual files
+2. Fetches package metadata from npm registry (`registry.npmjs.org`)
+3. Resolves semver versions (supports `^`, `~`, `>=`, exact versions)
+4. Downloads and extracts tarballs (`.tgz` files)
+5. Handles transitive dependencies recursively
+6. Populates virtual `node_modules/` with extracted files
+
+This is similar to `npm install` but operates entirely in memory.
 
 ## Limitations
 
-- **No Node.js built-ins** - Worker runtime doesn't have Node.js APIs
-- **esbuild-wasm performance** - WASM version is slower than native esbuild
-- **CDN dependencies** - `fetchDependencies` requires network access and adds latency
+- **No Node.js built-ins** - Worker runtime doesn't have Node.js APIs (fs, path, etc.)
+- **esbuild-wasm** - WASM initialization may fail in some environments; library falls back to transform-only mode
+- **npm registry latency** - `fetchDependencies` adds network latency for first install
+- **Large packages** - Very large npm packages may hit Worker memory limits
 
 ## License
 

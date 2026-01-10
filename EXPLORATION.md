@@ -135,34 +135,34 @@ Given the constraints, I propose a **tiered approach**:
    - Tree shaking
    - Code splitting (if needed)
 
-## Open Questions
+## Resolved Questions
 
 1. **How to handle npm dependencies?**
-   - Option A: Require all node_modules to be in `files`
-   - Option B: Fetch from npm/esm.sh on demand
-   - Option C: Mark as external (user must handle)
+   - **Solution**: Fetch packages directly from npm registry (like `npm install`)
+   - Tried esm.sh CDN first but it had issues with transitive dependencies
+   - npm registry approach works in transform-only mode (no WASM required)
 
 2. **WASM initialization in Workers?**
-   - Need to test if esbuild-wasm works with Workers
-   - May need to use fetch() to get WASM binary
-   - Memory constraints may be an issue
+   - esbuild-wasm works in deployed Workers but not reliably in wrangler dev
+   - Library falls back to transform-only mode gracefully
+   - Transform-only mode + npm install works well as fallback
 
 3. **Caching strategy?**
-   - Can use Durable Objects or KV for caching bundles
-   - Cache key = hash of input files
+   - Future enhancement - not yet implemented
+   - Could use KV/Durable Objects for caching installed packages
 
-## Next Steps
+## Completed Steps
 
 1. [x] Set up project structure
 2. [x] Research available tools
 3. [x] Implement Sucrase-based TypeScript transformation
 4. [x] Implement custom module resolver
-5. [x] Test with simple Workers (17 tests passing)
+5. [x] Test with simple Workers (36 tests passing)
 6. [x] Explore esbuild-wasm initialization in Workers
 7. [x] Add bundling support (with fallback to transform-only)
-8. [ ] Add npm dependency resolution (stretch goal)
-9. [ ] Test with Worker Loader binding
-10. [ ] Add source map support
+8. [x] Add npm dependency resolution via npm registry
+9. [x] Test with Worker Loader binding (Hono starter works!)
+10. [ ] Add source map support (transformer supports it, not fully integrated)
 11. [ ] Add caching layer
 12. [ ] Performance optimization
 
@@ -188,23 +188,30 @@ All four test cases pass with the actual Worker Loader binding (wrangler 4.58.0)
 4. **Worker with env bindings** - Environment variables passed through
 
 ### Known Limitations
-1. **esbuild-wasm in Workers**: Requires WASM binary to be available. Wrangler handles bundling the WASM when deploying.
-2. **npm dependencies**: Must be included in `files` or marked as external
+1. **esbuild-wasm in Workers**: WASM initialization can fail in wrangler dev; falls back to transform-only mode
+2. **npm registry latency**: First install adds network latency
 3. **Source maps**: Implemented in transformer but not fully integrated
+4. **Large packages**: May hit Worker memory limits
 
 ### Architecture
 
 ```
 createWorker(options)
 ├── detectEntryPoint() - Find main module from package.json or defaults
+├── fetchDependencies=true?
+│   └── installDependencies() - Download packages from npm registry
+│       ├── fetchPackageMetadata() - Get package info from registry
+│       ├── resolveVersion() - Resolve semver range to specific version
+│       ├── fetchPackageFiles() - Download and extract tarball
+│       └── (recursive) - Handle transitive dependencies
 ├── bundle=true?
 │   ├── bundleWithEsbuild() - Full bundling with tree-shaking
-│   │   ├── initializeEsbuild() - Load WASM binary
-│   │   └── virtualFsPlugin - Resolve from files object
+│   │   ├── initializeEsbuild() - Load WASM binary from CDN
+│   │   └── virtualFsPlugin - Resolve from files + node_modules
 │   └── (fallback) transformAndResolve()
 └── bundle=false
     └── transformAndResolve() - Transform each file independently
         ├── parseImports() - Find dependencies
-        ├── resolveModule() - Resolve import paths
+        ├── resolveModule() - Resolve import paths (including node_modules)
         └── transformCode() - Convert TS/JSX to JS
 ```
