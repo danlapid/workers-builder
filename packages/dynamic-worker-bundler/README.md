@@ -69,7 +69,8 @@ The main function that transforms source files into the Worker Loader format.
 | `minify` | `boolean` | `false` | Minify the output |
 | `sourcemap` | `boolean` | `false` | Generate source maps |
 | `strictBundling` | `boolean` | `false` | Throw error if bundling fails instead of falling back to transform-only mode |
-| `fetchDependencies` | `boolean` | `false` | Install npm dependencies from registry before bundling |
+
+**Note:** npm dependencies are automatically installed when `package.json` contains a `dependencies` field.
 
 #### Result
 
@@ -101,7 +102,7 @@ await initializeBundler({
 
 ### `installDependencies(files, options?): Promise<InstallResult>`
 
-Install npm packages into a virtual `node_modules` directory. This is called automatically when `fetchDependencies: true` in `createWorker()`.
+Install npm packages into a virtual `node_modules` directory. This is called automatically by `createWorker()` when `package.json` has dependencies.
 
 ```typescript
 import { installDependencies } from 'dynamic-worker-bundler';
@@ -159,6 +160,8 @@ const { mainModule, modules } = await createWorker({
 
 ### Using NPM Dependencies
 
+Dependencies are automatically installed when `package.json` contains a `dependencies` field:
+
 ```typescript
 const { mainModule, modules } = await createWorker({
   files: {
@@ -173,7 +176,6 @@ const { mainModule, modules } = await createWorker({
       dependencies: { 'hono': '^4.0.0' }
     }),
   },
-  fetchDependencies: true,  // Downloads hono from npm registry
 });
 
 // modules will include:
@@ -237,7 +239,6 @@ export default {
     const { mainModule, modules } = await createWorker({
       files: { /* ... */ },
       bundle: true,
-      fetchDependencies: true,
     });
     // ...
   }
@@ -258,7 +259,7 @@ const result = await createWorker({
 });
 ```
 
-In transform-only mode, each file is transformed individually and all modules are kept separate. This works well with `fetchDependencies: true` since npm packages are extracted to `node_modules` with their original structure.
+In transform-only mode, each file is transformed individually and all modules are kept separate. This works well with npm dependencies since packages are extracted to `node_modules` with their original structure.
 
 ### Using Lower-level APIs
 
@@ -320,7 +321,6 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const { mainModule, modules } = await createWorker({
       files: { /* ... */ },
-      fetchDependencies: true,
     });
     
     const worker = await env.LOADER.get('worker-name', async () => ({
@@ -337,7 +337,7 @@ export default {
 ## How It Works
 
 1. **Entry Point Detection** - Finds the entry point from `package.json` main/module fields or defaults to `src/index.ts`
-2. **Dependency Installation** (if `fetchDependencies: true`) - Downloads packages from npm registry and populates virtual `node_modules`
+2. **Dependency Installation** - If `package.json` has dependencies, downloads packages from npm registry and populates virtual `node_modules`
 3. **Transformation** - Transforms TypeScript/JSX files to JavaScript using Sucrase
 4. **Import Resolution** - Resolves and rewrites imports to absolute paths
 5. **Bundling** (optional) - Bundles all dependencies using esbuild-wasm
@@ -345,7 +345,7 @@ export default {
 
 ## How Dependency Installation Works
 
-When `fetchDependencies: true`:
+When `package.json` contains dependencies:
 
 1. Reads `package.json` from the virtual files
 2. Fetches package metadata from npm registry (`registry.npmjs.org`)
@@ -360,7 +360,7 @@ This is similar to `npm install` but operates entirely in memory.
 
 - **No Node.js built-ins** - Worker runtime doesn't have Node.js APIs (fs, path, etc.)
 - **esbuild-wasm** - WASM initialization may fail in some environments; library falls back to transform-only mode
-- **npm registry latency** - `fetchDependencies` adds network latency for first install
+- **npm registry latency** - Dependency installation adds network latency for first install
 - **Large packages** - Very large npm packages may hit Worker memory limits
 
 ## License

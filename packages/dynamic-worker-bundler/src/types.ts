@@ -65,14 +65,6 @@ export interface CreateWorkerOptions {
    * @default false
    */
   sourcemap?: boolean;
-
-  /**
-   * Fetch and install npm dependencies from the npm registry.
-   * When enabled, dependencies listed in package.json will be downloaded
-   * and added to a virtual node_modules directory before bundling.
-   * @default false
-   */
-  fetchDependencies?: boolean;
 }
 
 /**

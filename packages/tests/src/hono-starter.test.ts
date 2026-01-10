@@ -92,7 +92,6 @@ describe('Hono Starter E2E', () => {
     const result = await createWorker({
       files: HONO_STARTER_FILES,
       bundle: false,
-      fetchDependencies: true,
     });
 
     // ========================================
@@ -155,7 +154,6 @@ describe('Hono Starter E2E', () => {
     const result = await createWorker({
       files: HONO_STARTER_FILES,
       bundle: false,
-      fetchDependencies: true,
     });
 
     const mainContent = result.modules[EXPECTED_MAIN_MODULE] as string;
@@ -177,7 +175,6 @@ describe('Hono Starter E2E', () => {
     const result = await createWorker({
       files: HONO_STARTER_FILES,
       bundle: false,
-      fetchDependencies: true,
     });
 
     // Verify import chain: index.js -> hono.js -> hono-base.js
@@ -195,22 +192,31 @@ describe('Hono Starter E2E', () => {
     expect(honoBaseJs).toContain('./compose.js');
   }, 60000);
 
-  it('should work without fetchDependencies (leaves hono import unchanged)', async () => {
+  it('should leave external imports unchanged when no dependencies in package.json', async () => {
+    // Files with NO dependencies - hono import should be treated as external
+    const filesWithoutDeps = {
+      'package.json': JSON.stringify({
+        name: 'test-worker',
+        main: 'src/index.ts',
+        // No dependencies!
+      }),
+      'src/index.ts': HONO_STARTER_FILES['src/index.ts'],
+    };
+
     const result = await createWorker({
-      files: HONO_STARTER_FILES,
+      files: filesWithoutDeps,
       bundle: false,
-      fetchDependencies: false,
     });
 
     // Main module should still be transformed
     expect(result.mainModule).toBe(EXPECTED_MAIN_MODULE);
 
-    // Should only have the source file (no node_modules)
+    // Should only have the source file (no node_modules since no deps)
     const moduleKeys = Object.keys(result.modules);
     expect(moduleKeys).toHaveLength(1);
     expect(moduleKeys).toContain('src/index.js');
 
-    // The import should remain as 'hono' (not rewritten, treated as external)
+    // The import should remain as 'hono' (treated as external)
     const mainContent = result.modules['src/index.js'] as string;
     expect(mainContent).toContain("from 'hono'");
 
@@ -225,7 +231,6 @@ describe('Hono Starter Module Structure', () => {
     const result = await createWorker({
       files: HONO_STARTER_FILES,
       bundle: false,
-      fetchDependencies: true,
     });
 
     const moduleKeys = Object.keys(result.modules);
@@ -252,7 +257,6 @@ describe('Hono Starter Module Structure', () => {
     const result = await createWorker({
       files: HONO_STARTER_FILES,
       bundle: false,
-      fetchDependencies: true,
     });
 
     const moduleKeys = Object.keys(result.modules);
@@ -286,7 +290,6 @@ export default app
     const result = await createWorker({
       files: filesWithTypes,
       bundle: false,
-      fetchDependencies: true,
     });
 
     const mainContent = result.modules['src/index.js'] as string;
@@ -323,7 +326,6 @@ export default app
     const result = await createWorker({
       files: filesWithJsx,
       bundle: false,
-      fetchDependencies: true,
     });
 
     expect(result.mainModule).toBe('src/index.js');
@@ -341,7 +343,6 @@ describe('Hono Starter Full Bundling', () => {
     const result = await createWorker({
       files: HONO_STARTER_FILES,
       bundle: true,
-      fetchDependencies: true,
     });
 
     // Should produce a single bundled file
@@ -372,7 +373,6 @@ describe('Hono Starter Full Bundling', () => {
       files: HONO_STARTER_FILES,
       bundle: true,
       sourcemap: true,
-      fetchDependencies: true,
     });
 
     expect(result.mainModule).toBe('bundle.js');
@@ -388,7 +388,7 @@ describe('Hono Starter Full Bundling', () => {
     );
     expect(sourcemapMatch).not.toBeNull();
 
-    const sourcemapJson = atob(sourcemapMatch![1]);
+    const sourcemapJson = atob(sourcemapMatch?.[1] ?? '');
     const sourcemap = JSON.parse(sourcemapJson);
 
     // Verify sourcemap has required fields
@@ -402,7 +402,6 @@ describe('Hono Starter Full Bundling', () => {
     const result = await createWorker({
       files: HONO_STARTER_FILES,
       bundle: true,
-      fetchDependencies: true,
     });
 
     const bundleContent = result.modules['bundle.js'] as string;

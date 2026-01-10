@@ -38,7 +38,8 @@
       "!**/pnpm-lock.yaml",
       "!**/.wrangler",
       "!**/.claude",
-      "!**/worker-configuration.d.ts"
+      "!**/worker-configuration.d.ts",
+      "!**/.vite-test-cache"
     ]
   }
 }

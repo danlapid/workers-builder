@@ -72,7 +72,7 @@ const response = await worker.getEntrypoint().fetch(request);
 `createWorker()` takes source files (TypeScript, JSX, etc.) and:
 
 1. **Detects entry point** from `package.json` or defaults to `src/index.ts`
-2. **Installs npm dependencies** (if `fetchDependencies: true`) - downloads packages from npm registry
+2. **Auto-installs npm dependencies** if `package.json` has dependencies - downloads packages from npm registry
 3. **Transforms TypeScript/JSX** to JavaScript using Sucrase
 4. **Resolves and rewrites imports** to match Worker Loader's expected paths
 5. **Optionally bundles** everything with esbuild-wasm into a single file
@@ -93,7 +93,6 @@ const { mainModule, modules } = await createWorker({
       dependencies: { 'hono': '^4.0.0' }
     }),
   },
-  fetchDependencies: true,
   bundle: false,
 });
 ```
@@ -168,7 +167,6 @@ interface CreateWorkerOptions {
   minify?: boolean;           // default: false
   sourcemap?: boolean;        // default: false
   strictBundling?: boolean;   // default: false
-  fetchDependencies?: boolean; // default: false
 }
 
 interface CreateWorkerResult {
@@ -183,20 +181,14 @@ interface CreateWorkerResult {
 Tests use Vitest with `@cloudflare/vitest-pool-workers`.
 
 **Test files:**
-- `bundler.test.ts` - Unit tests for transform, parse, resolve functions
-- `integration.test.ts` - GitHub import + npm install tests
+- `bundler.test.ts` - Unit tests for createWorker function
 - `hono-starter.test.ts` - Full E2E tests with Hono starter template
-- `e2e.test.ts` - End-to-end tests (requires playground running)
-
-**Skipped tests:**
-- `bundleWithEsbuild` integration - esbuild-wasm can't initialize in workerd tests
-- E2E tests - Require playground to be running
 
 ## Known Limitations
 
 1. **esbuild-wasm in Workers** - WASM initialization can fail in wrangler dev; library falls back to transform-only mode
 2. **No Node.js built-ins** - Worker runtime doesn't have Node.js APIs
-3. **npm registry latency** - `fetchDependencies` adds network latency for first fetch
+3. **npm registry latency** - Dependency installation adds network latency for first fetch
 4. **Large packages** - Very large npm packages may hit memory limits
 
 ## Architecture Decisions

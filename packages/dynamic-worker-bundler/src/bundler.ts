@@ -11,7 +11,7 @@ import type { CreateWorkerOptions, CreateWorkerResult, Files, Modules } from './
  *
  * This function performs:
  * 1. Entry point detection (from package.json or defaults)
- * 2. Dependency installation (if fetchDependencies is true)
+ * 2. Auto-installation of npm dependencies (if package.json has dependencies)
  * 3. TypeScript/JSX transformation (via Sucrase)
  * 4. Module resolution (handling imports/exports)
  * 5. Optional bundling (combining all modules into one)
@@ -27,12 +27,11 @@ export async function createWorker(options: CreateWorkerOptions): Promise<Create
     target = 'es2022',
     minify = false,
     sourcemap = false,
-    fetchDependencies = false,
   } = options;
 
-  // If fetchDependencies is enabled, install npm dependencies first
+  // Auto-install dependencies if package.json has dependencies
   const installWarnings: string[] = [];
-  if (fetchDependencies) {
+  if (hasDependencies(files)) {
     const installResult = await installDependencies(files);
     files = installResult.files;
     installWarnings.push(...installResult.warnings);
@@ -397,6 +396,22 @@ function normalizeEntryPath(path: string): string {
     return path.slice(2);
   }
   return path;
+}
+
+/**
+ * Check if files contain a package.json with dependencies that need installing.
+ */
+function hasDependencies(files: Files): boolean {
+  const packageJson = files['package.json'];
+  if (!packageJson) return false;
+
+  try {
+    const pkg = JSON.parse(packageJson);
+    const deps = pkg.dependencies ?? {};
+    return Object.keys(deps).length > 0;
+  } catch {
+    return false;
+  }
 }
 
 /**

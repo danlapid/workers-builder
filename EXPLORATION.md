@@ -198,7 +198,7 @@ All four test cases pass with the actual Worker Loader binding (wrangler 4.58.0)
 ```
 createWorker(options)
 ├── detectEntryPoint() - Find main module from package.json or defaults
-├── fetchDependencies=true?
+├── hasDependencies()?
 │   └── installDependencies() - Download packages from npm registry
 │       ├── fetchPackageMetadata() - Get package info from registry
 │       ├── resolveVersion() - Resolve semver range to specific version

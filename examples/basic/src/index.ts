@@ -26,11 +26,10 @@ export default {
 
         const startTime = Date.now();
 
-        // Bundle the worker with esbuild, fetching dependencies
+        // Bundle the worker with esbuild (dependencies are auto-installed from package.json)
         const { mainModule, modules, warnings } = await createWorker({
           files,
           bundle: true,
-          fetchDependencies: true,
         });
 
         // Create and run the dynamic worker
