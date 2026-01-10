@@ -22,7 +22,6 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
-    "es-module-lexer": "^2.0.0",
     "esbuild-wasm": "^0.24.2",
     "resolve.exports": "^2.0.3",
     "sucrase": "^3.35.1"

@@ -21,6 +21,7 @@ export async function createWorker(options: CreateWorkerOptions): Promise<Create
     files,
     bundle = true,
     externals = [],
+    target = 'es2022',
     minify = false,
     sourcemap = false,
     strictBundling = false,
@@ -57,7 +58,7 @@ export async function createWorker(options: CreateWorkerOptions): Promise<Create
   if (bundle) {
     // Try bundling with esbuild-wasm
     try {
-      const result = await bundleWithEsbuild(files, entryPoint, externals, minify, sourcemap);
+      const result = await bundleWithEsbuild(files, entryPoint, externals, target, minify, sourcemap);
 
       // Add install warnings to result
       if (installWarnings.length > 0) {
@@ -439,6 +440,7 @@ async function bundleWithEsbuild(
   files: Files,
   entryPoint: string,
   externals: string[],
+  target: string,
   minify: boolean,
   sourcemap: boolean
 ): Promise<CreateWorkerResult> {
@@ -516,7 +518,7 @@ async function bundleWithEsbuild(
     write: false,
     format: 'esm',
     platform: 'browser', // Workers are browser-like
-    target: 'es2022',
+    target,
     minify,
     sourcemap: sourcemap ? 'inline' : false,
     plugins: [virtualFsPlugin],

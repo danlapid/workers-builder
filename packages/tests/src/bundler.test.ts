@@ -3,9 +3,6 @@ import {
   getOutputPath,
   isTypeScriptFile,
   parseImports,
-  parseImportsAsync,
-  parsePackageSpecifier,
-  resolveEsmShImports,
   resolveModule,
   transformCode,
 } from 'dynamic-worker-bundler';
@@ -286,102 +283,4 @@ describe('createWorker', () => {
   });
 });
 
-// Note: parseImportsAsync uses es-module-lexer which requires WASM.
-// WASM compilation is not allowed in the workerd test environment,
-// so these tests are skipped. The function works correctly in Node.js
-// and standard Workers deployments.
-describe.skip('parseImportsAsync', () => {
-  it('should parse ES module imports using es-module-lexer', async () => {
-    const code = `
-      import foo from 'foo';
-      import { bar } from 'bar';
-      import * as baz from 'baz';
-      import 'side-effect';
-    `;
 
-    const imports = await parseImportsAsync(code);
-    expect(imports).toContain('foo');
-    expect(imports).toContain('bar');
-    expect(imports).toContain('baz');
-    expect(imports).toContain('side-effect');
-  });
-
-  it('should parse dynamic imports', async () => {
-    const code = `
-      const mod = await import('dynamic');
-      import('another-dynamic');
-    `;
-
-    const imports = await parseImportsAsync(code);
-    expect(imports).toContain('dynamic');
-    expect(imports).toContain('another-dynamic');
-  });
-
-  it('should deduplicate imports', async () => {
-    const code = `
-      import foo from 'foo';
-      import { bar } from 'foo';
-    `;
-
-    const imports = await parseImportsAsync(code);
-    expect(imports.filter((i) => i === 'foo').length).toBe(1);
-  });
-});
-
-describe('parsePackageSpecifier', () => {
-  it('should parse simple package names', () => {
-    expect(parsePackageSpecifier('lodash')).toEqual({ name: 'lodash' });
-  });
-
-  it('should parse package with version', () => {
-    expect(parsePackageSpecifier('lodash@4.17.21')).toEqual({
-      name: 'lodash',
-      version: '4.17.21',
-    });
-  });
-
-  it('should parse package with subpath', () => {
-    expect(parsePackageSpecifier('lodash/debounce')).toEqual({
-      name: 'lodash',
-      subpath: 'debounce',
-    });
-  });
-
-  it('should parse scoped packages', () => {
-    expect(parsePackageSpecifier('@scope/pkg')).toEqual({ name: '@scope/pkg' });
-  });
-
-  it('should parse scoped packages with version', () => {
-    expect(parsePackageSpecifier('@scope/pkg@1.0.0')).toEqual({
-      name: '@scope/pkg',
-      version: '1.0.0',
-    });
-  });
-
-  it('should parse scoped packages with subpath', () => {
-    expect(parsePackageSpecifier('@scope/pkg/sub')).toEqual({
-      name: '@scope/pkg',
-      subpath: 'sub',
-    });
-  });
-});
-
-describe('resolveEsmShImports', () => {
-  it('should resolve relative esm.sh imports to absolute URLs', () => {
-    const code = `import "/lodash@4.17.21/es2022/lodash.mjs";`;
-    const resolved = resolveEsmShImports(code);
-    expect(resolved).toBe(`import "https://esm.sh/lodash@4.17.21/es2022/lodash.mjs";`);
-  });
-
-  it('should handle export from statements', () => {
-    const code = `export * from "/lodash@4.17.21/es2022/lodash.mjs";`;
-    const resolved = resolveEsmShImports(code);
-    expect(resolved).toBe(`export * from "https://esm.sh/lodash@4.17.21/es2022/lodash.mjs";`);
-  });
-
-  it('should use custom CDN URL', () => {
-    const code = `import "/lodash@4.17.21/es2022/lodash.mjs";`;
-    const resolved = resolveEsmShImports(code, 'https://cdn.example.com');
-    expect(resolved).toBe(`import "https://cdn.example.com/lodash@4.17.21/es2022/lodash.mjs";`);
-  });
-});

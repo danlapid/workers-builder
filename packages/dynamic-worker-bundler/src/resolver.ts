@@ -1,9 +1,5 @@
-import { init as initLexer, parse as parseLexer } from 'es-module-lexer';
 import * as resolveExports from 'resolve.exports';
 import type { Files } from './types.js';
-
-// Track lexer initialization state
-let lexerInitialized = false;
 
 export interface ResolveOptions {
   /**
@@ -328,30 +324,4 @@ export function parseImports(code: string): string[] {
   }
 
   return [...new Set(imports)]; // Deduplicate
-}
-
-/**
- * Parse imports from a JavaScript/TypeScript source file using es-module-lexer.
- *
- * This is faster and more accurate than the regex-based parser,
- * but requires async initialization.
- *
- * @param code - The source code to parse
- * @returns Array of import specifiers
- */
-export async function parseImportsAsync(code: string): Promise<string[]> {
-  if (!lexerInitialized) {
-    await initLexer;
-    lexerInitialized = true;
-  }
-
-  const [imports] = parseLexer(code);
-
-  return [
-    ...new Set(
-      imports
-        .filter((imp) => imp.n !== undefined) // Only include imports with specifiers
-        .map((imp) => imp.n as string)
-    ),
-  ];
 }

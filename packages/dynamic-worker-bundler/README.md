@@ -37,11 +37,19 @@ const response = await worker.fetch(request);
 
 ## Features
 
-- **TypeScript/JSX transformation** - Transforms `.ts`, `.tsx`, `.jsx` files using [Sucrase](https://github.com/alangpierce/sucrase)
-- **Module resolution** - Resolves imports using Node.js resolution algorithm with `package.json` exports field support
+- **TypeScript/JSX transformation** - Transforms `.ts`, `.tsx`, `.jsx` files using [Sucrase](https://github.com/alangpierce/sucrase) (pure JS, no WASM)
+- **Module resolution** - Resolves imports using Node.js resolution algorithm with `package.json` exports field support via [resolve.exports](https://github.com/lukeed/resolve.exports)
 - **Import rewriting** - Rewrites relative imports to match Worker Loader's expected module paths
 - **Optional bundling** - Bundle all dependencies into a single file using [esbuild-wasm](https://esbuild.github.io/)
 - **NPM dependency installation** - Fetch and install npm packages from the registry at runtime
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| [sucrase](https://github.com/alangpierce/sucrase) | Fast TypeScript/JSX to JavaScript transformation (pure JS, no WASM required) |
+| [resolve.exports](https://github.com/lukeed/resolve.exports) | Resolves `package.json` `exports` field to find npm package entry points |
+| [esbuild-wasm](https://esbuild.github.io/) | Optional bundling into a single file (WASM-based, has fallback if unavailable) |
 
 ## API
 
