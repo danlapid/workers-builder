@@ -45,14 +45,10 @@ if (!wasmSource) {
   process.exit(1);
 }
 
-// Copy WASM file to both dist/ and src/ (src/ is needed for Vitest tests)
+// Copy WASM file to dist/
 const wasmDest = join(__dirname, 'dist/esbuild.wasm');
 copyFileSync(wasmSource, wasmDest);
 console.log(`Copied esbuild.wasm to dist/`);
-
-const wasmSrcDest = join(__dirname, 'src/esbuild.wasm');
-copyFileSync(wasmSource, wasmSrcDest);
-console.log(`Copied esbuild.wasm to src/ (for tests)`);
 
 // Build the library - keep the WASM import as external
 // so it's resolved relative to the output file
