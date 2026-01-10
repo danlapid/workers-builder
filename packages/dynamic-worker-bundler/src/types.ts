@@ -43,7 +43,8 @@ export interface CreateWorkerOptions {
   bundle?: boolean;
 
   /**
-   * External modules that should not be bundled
+   * External modules that should not be bundled.
+   * Note: `cloudflare:*` modules are always treated as external.
    */
   externals?: string[];
 

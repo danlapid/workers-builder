@@ -43,6 +43,9 @@ export async function createWorker(options: CreateWorkerOptions): Promise<Create
     sourcemap = false,
   } = options;
 
+  // Always treat cloudflare:* modules as external (runtime-provided)
+  externals = ['cloudflare:', ...externals];
+
   // Parse wrangler config for compatibility settings
   const wranglerConfig = parseWranglerConfig(files);
   const nodejsCompat = hasNodejsCompat(wranglerConfig);

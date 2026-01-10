@@ -159,6 +159,59 @@ describe('createWorker', () => {
     });
   });
 
+  describe('externals', () => {
+    it('should treat cloudflare:* imports as external by default', async () => {
+      const result = await createWorker({
+        files: {
+          'src/index.ts': `
+            import { WorkerEntrypoint } from 'cloudflare:workers';
+            export class MyWorker extends WorkerEntrypoint {
+              fetch() { return new Response('ok'); }
+            }
+          `,
+        },
+      });
+
+      const code = result.modules['bundle.js'] as string;
+      // esbuild uses double quotes
+      expect(code).toContain('from "cloudflare:workers"');
+      expect(code).toContain('WorkerEntrypoint');
+    });
+
+    it('should treat cloudflare:* imports as external in transform mode', async () => {
+      const result = await createWorker({
+        files: {
+          'src/index.ts': `
+            import { WorkerEntrypoint } from 'cloudflare:workers';
+            export class MyWorker extends WorkerEntrypoint {
+              fetch() { return new Response('ok'); }
+            }
+          `,
+        },
+        bundle: false,
+      });
+
+      const code = result.modules['src/index.js'] as string;
+      expect(code).toContain("from 'cloudflare:workers'");
+    });
+
+    it('should treat user-specified externals as external', async () => {
+      const result = await createWorker({
+        files: {
+          'src/index.ts': `
+            import something from 'my-external-pkg';
+            export default { fetch: () => new Response(something) };
+          `,
+        },
+        externals: ['my-external-pkg'],
+      });
+
+      const code = result.modules['bundle.js'] as string;
+      // esbuild uses double quotes
+      expect(code).toContain('from "my-external-pkg"');
+    });
+  });
+
   describe('entry point detection', () => {
     it('should detect entry point from package.json main field', async () => {
       const result = await createWorker({

@@ -47,7 +47,7 @@ await worker.getEntrypoint().fetch(request);
 | `files` | `Record<string, string>` | *required* | Source files (path → content) |
 | `entryPoint` | `string` | auto | Override entry point detection |
 | `bundle` | `boolean` | `true` | Bundle into single file |
-| `externals` | `string[]` | `[]` | Modules to exclude from bundle |
+| `externals` | `string[]` | `[]` | Additional modules to exclude (`cloudflare:*` always excluded) |
 | `minify` | `boolean` | `false` | Minify output |
 | `sourcemap` | `boolean` | `false` | Generate inline source maps |
 
@@ -102,17 +102,6 @@ Skip bundling to preserve module structure:
 const { mainModule, modules } = await createWorker({
   files: { /* ... */ },
   bundle: false,
-});
-```
-
-### External Modules
-
-Exclude modules from the bundle:
-
-```typescript
-const { mainModule, modules } = await createWorker({
-  files: { /* ... */ },
-  externals: ['cloudflare:workers'],
 });
 ```
 
