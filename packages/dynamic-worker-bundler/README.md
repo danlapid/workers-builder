@@ -50,7 +50,7 @@ await worker.getEntrypoint().fetch(request);
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `files` | `Record<string, string>` | *required* | Source files (path → content) |
-| `entryPoint` | `string` | auto-detected | Entry point path |
+| `entryPoint` | `string` | auto-detected | Entry point path (detected from wrangler.toml `main`, package.json, or defaults) |
 | `bundle` | `boolean` | `true` | Bundle into single file |
 | `externals` | `string[]` | `[]` | Modules to exclude from bundle |
 | `minify` | `boolean` | `false` | Minify output |
@@ -65,7 +65,7 @@ Returns:
 | `wranglerConfig` | `WranglerConfig?` | Parsed config from `wrangler.toml/json/jsonc` |
 | `warnings` | `string[]?` | Any warnings during bundling |
 
-`wranglerConfig` is `undefined` if no config file exists, `{}` if config exists but has no compatibility settings, or contains `compatibilityDate` and/or `compatibilityFlags` if present. You must handle these cases and provide defaults as needed.
+`wranglerConfig` is `undefined` if no config file exists, `{}` if config exists but has no relevant fields, or contains `main`, `compatibilityDate`, and/or `compatibilityFlags` if present. The `main` field is used for entry point detection. You must handle these cases and provide defaults as needed.
 
 ## Examples
 

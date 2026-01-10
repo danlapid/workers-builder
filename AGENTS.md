@@ -51,7 +51,7 @@ createWorker(options)
 │       ├── resolveVersion()       # Resolve semver
 │       └── fetchPackageFiles()    # Download & extract tarball
 │
-├── detectEntryPoint(files)        # From package.json or defaults
+├── detectEntryPoint(files, config) # From wrangler main, package.json, or defaults
 │
 └── bundle: true?
     ├── bundleWithEsbuild()        # Single file output
@@ -79,7 +79,7 @@ Main orchestration. Key functions:
 Wrangler configuration parsing (uses smol-toml for TOML):
 - `parseWranglerConfig()` - Parse wrangler.toml/json/jsonc from files
 - `hasNodejsCompat()` - Check if nodejs_compat flag is enabled
-- Extracts `compatibility_date` and `compatibility_flags` for Worker Loader
+- Extracts `main`, `compatibility_date`, and `compatibility_flags` for Worker Loader
 
 ### `installer.ts`
 Fetches npm packages into virtual `node_modules/`:
@@ -115,6 +115,7 @@ interface CreateWorkerOptions {
 }
 
 interface WranglerConfig {
+  main?: string;
   compatibilityDate?: string;
   compatibilityFlags?: string[];
 }

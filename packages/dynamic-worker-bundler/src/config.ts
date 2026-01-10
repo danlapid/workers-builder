@@ -43,7 +43,7 @@ export function parseWranglerConfig(files: Files): WranglerConfig | undefined {
 function parseWranglerToml(content: string): WranglerConfig {
   try {
     const config = parseToml(content) as Record<string, unknown>;
-    return extractCompatibilityConfig(config);
+    return extractWranglerConfig(config);
   } catch {
     return {};
   }
@@ -55,7 +55,7 @@ function parseWranglerToml(content: string): WranglerConfig {
 function parseWranglerJson(content: string): WranglerConfig {
   try {
     const config = JSON.parse(content) as Record<string, unknown>;
-    return extractCompatibilityConfig(config);
+    return extractWranglerConfig(config);
   } catch {
     return {};
   }
@@ -69,18 +69,24 @@ function parseWranglerJsonc(content: string): WranglerConfig {
     // Strip comments from JSONC
     const jsonContent = stripJsonComments(content);
     const config = JSON.parse(jsonContent) as Record<string, unknown>;
-    return extractCompatibilityConfig(config);
+    return extractWranglerConfig(config);
   } catch {
     return {};
   }
 }
 
 /**
- * Extract compatibility settings from parsed config object.
+ * Extract wrangler config fields from parsed config object.
  * Handles both snake_case (toml) and camelCase (json) formats.
  */
-function extractCompatibilityConfig(config: Record<string, unknown>): WranglerConfig {
+function extractWranglerConfig(config: Record<string, unknown>): WranglerConfig {
   const result: WranglerConfig = {};
+
+  // main entry point
+  const main = config['main'];
+  if (typeof main === 'string') {
+    result.main = main;
+  }
 
   // compatibility_date (toml) or compatibilityDate (json)
   const date = config['compatibility_date'] ?? config['compatibilityDate'];

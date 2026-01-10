@@ -31,7 +31,8 @@ export interface CreateWorkerOptions {
 
   /**
    * Entry point file path (relative to project root)
-   * If not specified, will try to determine from package.json or use src/index.ts
+   * If not specified, will try to determine from wrangler.toml main field,
+   * then package.json, then default paths (src/index.ts, etc.)
    */
   entryPoint?: string;
 
@@ -71,6 +72,7 @@ export interface CreateWorkerOptions {
  * Parsed wrangler configuration relevant to Worker Loader
  */
 export interface WranglerConfig {
+  main?: string;
   compatibilityDate?: string;
   compatibilityFlags?: string[];
 }

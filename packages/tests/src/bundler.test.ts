@@ -315,5 +315,45 @@ compatibility_flags = ["nodejs_compat", "streams_enable_constructors"]
 
       expect(result.wranglerConfig?.compatibilityDate).toBe('2024-01-01');
     });
+
+    it('should use wrangler main field as entry point', async () => {
+      const result = await createWorker({
+        files: {
+          'worker/handler.ts': 'export default { fetch: () => new Response("from handler") };',
+          'src/index.ts': 'export default { fetch: () => new Response("from index") };',
+          'wrangler.toml': `main = "worker/handler.ts"`,
+        },
+        bundle: false,
+      });
+
+      expect(result.mainModule).toBe('worker/handler.js');
+      expect(result.wranglerConfig?.main).toBe('worker/handler.ts');
+    });
+
+    it('should normalize wrangler main field with leading ./', async () => {
+      const result = await createWorker({
+        files: {
+          'src/worker.ts': 'export default { fetch: () => new Response("ok") };',
+          'wrangler.toml': `main = "./src/worker.ts"`,
+        },
+        bundle: false,
+      });
+
+      expect(result.mainModule).toBe('src/worker.js');
+    });
+
+    it('should prefer wrangler main over package.json main', async () => {
+      const result = await createWorker({
+        files: {
+          'worker/handler.ts': 'export default { fetch: () => new Response("from wrangler") };',
+          'lib/index.ts': 'export default { fetch: () => new Response("from package") };',
+          'wrangler.toml': `main = "worker/handler.ts"`,
+          'package.json': JSON.stringify({ main: 'lib/index.ts' }),
+        },
+        bundle: false,
+      });
+
+      expect(result.mainModule).toBe('worker/handler.js');
+    });
   });
 });

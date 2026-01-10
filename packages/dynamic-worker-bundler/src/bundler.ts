@@ -6,7 +6,13 @@ import esbuildWasm from './esbuild.wasm';
 import { installDependencies } from './installer.js';
 import { parseImports, resolveModule } from './resolver.js';
 import { getOutputPath, isJavaScriptFile, isTypeScriptFile, transformCode } from './transformer.js';
-import type { CreateWorkerOptions, CreateWorkerResult, Files, Modules } from './types.js';
+import type {
+  CreateWorkerOptions,
+  CreateWorkerResult,
+  Files,
+  Modules,
+  WranglerConfig,
+} from './types.js';
 
 /**
  * Creates a worker bundle from source files.
@@ -43,8 +49,8 @@ export async function createWorker(options: CreateWorkerOptions): Promise<Create
     installWarnings.push(...installResult.warnings);
   }
 
-  // Detect entry point
-  const entryPoint = options.entryPoint ?? detectEntryPoint(files);
+  // Detect entry point (priority: explicit option > wrangler main > package.json > defaults)
+  const entryPoint = options.entryPoint ?? detectEntryPoint(files, wranglerConfig);
 
   if (!entryPoint) {
     throw new Error('Could not determine entry point. Please specify entryPoint option.');
@@ -344,9 +350,18 @@ function getDirectory(filePath: string): string {
 }
 
 /**
- * Detect entry point from package.json or use defaults
+ * Detect entry point from wrangler config, package.json, or use defaults.
+ * Priority: wrangler main > package.json exports/module/main > default paths
  */
-function detectEntryPoint(files: Files): string | undefined {
+function detectEntryPoint(
+  files: Files,
+  wranglerConfig: WranglerConfig | undefined
+): string | undefined {
+  // First, check wrangler config main field
+  if (wranglerConfig?.main) {
+    return normalizeEntryPath(wranglerConfig.main);
+  }
+
   // Try to read package.json
   const packageJsonContent = files['package.json'];
   if (packageJsonContent) {
