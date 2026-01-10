@@ -37,7 +37,7 @@ export default {
         const worker = env.LOADER.get(`playground-worker-v${version}`, async () => ({
           mainModule,
           modules: modules as Record<string, string>,
-          compatibilityDate: '2025-01-01',
+          compatibilityDate: '2026-01-01',
           env: {
             // Pass some example env vars
             API_KEY: 'sk-example-key-12345',

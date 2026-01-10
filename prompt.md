@@ -14,7 +14,7 @@ let worker = env.LOADER.get(id, async () => {
         "  fetch(req, env, ctx) { return new Response('Hello'); }\n" +
         "}\n",
     },
-    compatibilityDate: "2025-06-01",
+    compatibilityDate: "2026-06-01",
     env: {
       SOME_ENV_VAR: 123
     },
@@ -38,7 +38,7 @@ let worker = env.LOADER.get(id, async () => {
   return {
     mainModule: mainModule,
     modules: modules,
-    compatibilityDate: "2025-06-01",
+    compatibilityDate: "2026-06-01",
     env: {
       SOME_ENV_VAR: 123
     },

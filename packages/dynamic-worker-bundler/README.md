@@ -29,7 +29,7 @@ const { mainModule, modules } = await createWorker({
 const worker = await env.LOADER.get('my-worker', async () => ({
   mainModule,
   modules,
-  compatibilityDate: '2025-01-01',
+  compatibilityDate: '2026-01-01',
 }));
 
 const response = await worker.fetch(request);
@@ -193,7 +193,7 @@ const { mainModule, modules } = await createWorker({
 const worker = await env.LOADER.get('my-worker', async () => ({
   mainModule,
   modules,
-  compatibilityDate: '2025-01-01',
+  compatibilityDate: '2026-01-01',
   env: {
     API_KEY: 'secret-key',
     KV: env.MY_KV_NAMESPACE,
@@ -283,7 +283,7 @@ export default {
     const worker = await env.LOADER.get('worker-name', async () => ({
       mainModule,
       modules,
-      compatibilityDate: '2025-01-01',
+      compatibilityDate: '2026-01-01',
     }));
     
     return worker.getEntrypoint().fetch(request);

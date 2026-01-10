@@ -61,7 +61,7 @@ const worker = env.LOADER.get('worker-name', async () => ({
     'src/index.js': 'export default {...}',
     'node_modules/hono/dist/index.js': '...',
   },
-  compatibilityDate: '2025-01-01',
+  compatibilityDate: '2026-01-01',
 }));
 
 const response = await worker.getEntrypoint().fetch(request);
