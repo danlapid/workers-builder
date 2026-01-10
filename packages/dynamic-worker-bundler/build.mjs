@@ -43,7 +43,7 @@ await esbuild.build({
   target: 'es2022',
   sourcemap: true,
   // Mark npm dependencies as external
-  external: ['esbuild-wasm', 'sucrase', 'resolve.exports'],
+  external: ['esbuild-wasm', 'sucrase', 'resolve.exports', 'smol-toml'],
   plugins: [
     {
       name: 'wasm-external',

@@ -27,7 +27,7 @@ export default {
         const startTime = Date.now();
 
         // Bundle the worker with esbuild (dependencies are auto-installed from package.json)
-        const { mainModule, modules, warnings } = await createWorker({
+        const { mainModule, modules, wranglerConfig, warnings } = await createWorker({
           files,
           bundle: true,
         });
@@ -36,7 +36,9 @@ export default {
         const worker = env.LOADER.get(`playground-worker-v${version}`, async () => ({
           mainModule,
           modules: modules as Record<string, string>,
-          compatibilityDate: '2026-01-01',
+          // Use wranglerConfig if available, otherwise use defaults
+          compatibilityDate: wranglerConfig?.compatibilityDate ?? '2024-01-01',
+          compatibilityFlags: wranglerConfig?.compatibilityFlags ?? [],
           env: {
             // Pass some example env vars
             API_KEY: 'sk-example-key-12345',
@@ -44,8 +46,6 @@ export default {
           },
           globalOutbound: null,
         }));
-
-        const entrypoint = worker.getEntrypoint();
 
         // Execute the worker with a test request
         const testRequest = new Request('https://example.com/', {
@@ -57,7 +57,7 @@ export default {
         let workerError: { message: string; stack?: string | undefined } | null = null;
 
         try {
-          workerResponse = await entrypoint.fetch(testRequest);
+          workerResponse = await worker.getEntrypoint().fetch(testRequest);
           responseBody = await workerResponse.text();
 
           // Check if the worker returned a 500 error - this often indicates an uncaught exception

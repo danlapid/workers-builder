@@ -204,4 +204,116 @@ describe('createWorker', () => {
       expect(result.modules['src/index.js']).not.toContain(': Response');
     });
   });
+
+  describe('wrangler config parsing', () => {
+    it('should extract compatibility settings from wrangler.toml', async () => {
+      const result = await createWorker({
+        files: {
+          'src/index.ts': 'export default { fetch: () => new Response("ok") };',
+          'wrangler.toml': `
+name = "my-worker"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat", "streams_enable_constructors"]
+          `,
+        },
+        bundle: false,
+      });
+
+      expect(result.wranglerConfig?.compatibilityDate).toBe('2024-01-01');
+      expect(result.wranglerConfig?.compatibilityFlags).toEqual([
+        'nodejs_compat',
+        'streams_enable_constructors',
+      ]);
+    });
+
+    it('should extract compatibility settings from wrangler.json', async () => {
+      const result = await createWorker({
+        files: {
+          'src/index.ts': 'export default { fetch: () => new Response("ok") };',
+          'wrangler.json': JSON.stringify({
+            name: 'my-worker',
+            compatibility_date: '2024-02-01',
+            compatibility_flags: ['nodejs_compat'],
+          }),
+        },
+        bundle: false,
+      });
+
+      expect(result.wranglerConfig?.compatibilityDate).toBe('2024-02-01');
+      expect(result.wranglerConfig?.compatibilityFlags).toEqual(['nodejs_compat']);
+    });
+
+    it('should extract compatibility settings from wrangler.jsonc', async () => {
+      const result = await createWorker({
+        files: {
+          'src/index.ts': 'export default { fetch: () => new Response("ok") };',
+          'wrangler.jsonc': `{
+            // This is a comment
+            "name": "my-worker",
+            "compatibility_date": "2024-03-01",
+            /* Multi-line
+               comment */
+            "compatibility_flags": ["nodejs_compat"]
+          }`,
+        },
+        bundle: false,
+      });
+
+      expect(result.wranglerConfig?.compatibilityDate).toBe('2024-03-01');
+      expect(result.wranglerConfig?.compatibilityFlags).toEqual(['nodejs_compat']);
+    });
+
+    it('should handle camelCase format in JSON config', async () => {
+      const result = await createWorker({
+        files: {
+          'src/index.ts': 'export default { fetch: () => new Response("ok") };',
+          'wrangler.json': JSON.stringify({
+            name: 'my-worker',
+            compatibilityDate: '2024-04-01',
+            compatibilityFlags: ['nodejs_compat'],
+          }),
+        },
+        bundle: false,
+      });
+
+      expect(result.wranglerConfig?.compatibilityDate).toBe('2024-04-01');
+      expect(result.wranglerConfig?.compatibilityFlags).toEqual(['nodejs_compat']);
+    });
+
+    it('should return empty wranglerConfig if config file has no compatibility fields', async () => {
+      const result = await createWorker({
+        files: {
+          'src/index.ts': 'export default { fetch: () => new Response("ok") };',
+          'wrangler.toml': `name = "my-worker"`,
+        },
+        bundle: false,
+      });
+
+      expect(result.wranglerConfig).toEqual({});
+    });
+
+    it('should not include wranglerConfig if no config file exists', async () => {
+      const result = await createWorker({
+        files: {
+          'src/index.ts': 'export default { fetch: () => new Response("ok") };',
+        },
+        bundle: false,
+      });
+
+      expect(result.wranglerConfig).toBeUndefined();
+    });
+
+    it('should prefer wrangler.toml over wrangler.json', async () => {
+      const result = await createWorker({
+        files: {
+          'src/index.ts': 'export default { fetch: () => new Response("ok") };',
+          'wrangler.toml': `compatibility_date = "2024-01-01"`,
+          'wrangler.json': JSON.stringify({ compatibility_date: '2024-02-01' }),
+        },
+        bundle: false,
+      });
+
+      expect(result.wranglerConfig?.compatibilityDate).toBe('2024-01-01');
+    });
+  });
 });

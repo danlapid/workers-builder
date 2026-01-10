@@ -68,6 +68,14 @@ export interface CreateWorkerOptions {
 }
 
 /**
+ * Parsed wrangler configuration relevant to Worker Loader
+ */
+export interface WranglerConfig {
+  compatibilityDate?: string;
+  compatibilityFlags?: string[];
+}
+
+/**
  * Result from createWorker
  */
 export interface CreateWorkerResult {
@@ -80,6 +88,11 @@ export interface CreateWorkerResult {
    * All modules in the bundle
    */
   modules: Modules;
+
+  /**
+   * Parsed wrangler configuration (from wrangler.toml/json/jsonc).
+   */
+  wranglerConfig?: WranglerConfig;
 
   /**
    * Any warnings generated during bundling

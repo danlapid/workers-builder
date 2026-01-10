@@ -57,6 +57,9 @@ importers:
       resolve.exports:
         specifier: ^2.0.0
         version: 2.0.3
+      smol-toml:
+        specifier: ^1.0.0
+        version: 1.6.0
       sucrase:
         specifier: ^3.0.0
         version: 3.35.1
@@ -1402,6 +1405,10 @@ packages:
   slash@3.0.0:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
+
+  smol-toml@1.6.0:
+    resolution: {integrity: sha512-4zemZi0HvTnYwLfrpk/CF9LOd9Lt87kAt50GnqhMpyF9U3poDAP2+iukq2bZsO/ufegbYehBkqINbsWxj4l4cw==}
+    engines: {node: '>= 18'}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -2805,6 +2812,8 @@ snapshots:
       is-arrayish: 0.3.4
 
   slash@3.0.0: {}
+
+  smol-toml@1.6.0: {}
 
   source-map-js@1.2.1: {}
 

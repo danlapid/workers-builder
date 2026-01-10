@@ -25,6 +25,7 @@
   "dependencies": {
     "esbuild-wasm": "^0.27.0",
     "resolve.exports": "^2.0.0",
+    "smol-toml": "^1.0.0",
     "sucrase": "^3.0.0"
   },
   "engines": {

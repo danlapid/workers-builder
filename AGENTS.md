@@ -13,6 +13,7 @@ dynamic-worker-bundler/
 │   │   ├── src/
 │   │   │   ├── index.ts            # Public exports (createWorker + types)
 │   │   │   ├── bundler.ts          # Main createWorker() orchestration
+│   │   │   ├── config.ts           # Wrangler config parsing (toml/json/jsonc)
 │   │   │   ├── installer.ts        # npm package fetching & extraction
 │   │   │   ├── transformer.ts      # TypeScript/JSX transformation (Sucrase)
 │   │   │   ├── resolver.ts         # Module resolution & import parsing
@@ -42,6 +43,8 @@ pnpm run check      # Lint/format check
 
 ```
 createWorker(options)
+├── parseWranglerConfig(files)     # Extract compatibility settings
+│
 ├── hasDependencies(files)?
 │   └── installDependencies()      # Fetch from npm registry
 │       ├── fetchPackageMetadata() # Get package info
@@ -53,6 +56,7 @@ createWorker(options)
 └── bundle: true?
     ├── bundleWithEsbuild()        # Single file output
     │   └── virtualFsPlugin        # In-memory file resolution
+    │   └── platform: node/browser # Based on nodejs_compat flag
     │
     └── (fallback) transformAndResolve()
         ├── parseImports()         # Find dependencies  
@@ -70,6 +74,12 @@ Main orchestration. Key functions:
 - `bundleWithEsbuild()` - esbuild-wasm bundling with virtual FS plugin
 - `transformAndResolve()` - Transform-only mode (no bundling)
 - `rewriteImports()` - Rewrite import paths to absolute
+
+### `config.ts`
+Wrangler configuration parsing (uses smol-toml for TOML):
+- `parseWranglerConfig()` - Parse wrangler.toml/json/jsonc from files
+- `hasNodejsCompat()` - Check if nodejs_compat flag is enabled
+- Extracts `compatibility_date` and `compatibility_flags` for Worker Loader
 
 ### `installer.ts`
 Fetches npm packages into virtual `node_modules/`:
@@ -104,9 +114,15 @@ interface CreateWorkerOptions {
   sourcemap?: boolean;     // default: false (bundle mode only)
 }
 
+interface WranglerConfig {
+  compatibilityDate?: string;
+  compatibilityFlags?: string[];
+}
+
 interface CreateWorkerResult {
   mainModule: string;
   modules: Record<string, string | Module>;
+  wranglerConfig?: WranglerConfig;  // From wrangler.toml/json/jsonc
   warnings?: string[];
 }
 ```
@@ -139,7 +155,7 @@ pnpm run test  # Builds library first, then runs tests
 ## Known Limitations
 
 1. **esbuild-wasm** - Can fail in wrangler dev; falls back to transform-only
-2. **No Node.js APIs** - fs, path, etc. not available in Workers
+2. **Node.js APIs** - Requires `nodejs_compat` flag in wrangler config
 3. **npm latency** - First install requires network fetch
 4. **Memory** - Large packages may exceed Worker limits
 5. **Sourcemaps** - Only work in bundle mode

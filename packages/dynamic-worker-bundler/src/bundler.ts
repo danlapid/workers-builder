@@ -1,4 +1,6 @@
 import * as esbuild from 'esbuild-wasm';
+
+import { hasNodejsCompat, parseWranglerConfig } from './config.js';
 // @ts-expect-error - WASM module import
 import esbuildWasm from './esbuild.wasm';
 import { installDependencies } from './installer.js';
@@ -29,6 +31,10 @@ export async function createWorker(options: CreateWorkerOptions): Promise<Create
     sourcemap = false,
   } = options;
 
+  // Parse wrangler config for compatibility settings
+  const wranglerConfig = parseWranglerConfig(files);
+  const nodejsCompat = hasNodejsCompat(wranglerConfig);
+
   // Auto-install dependencies if package.json has dependencies
   const installWarnings: string[] = [];
   if (hasDependencies(files)) {
@@ -50,7 +56,20 @@ export async function createWorker(options: CreateWorkerOptions): Promise<Create
 
   if (bundle) {
     // Try bundling with esbuild-wasm
-    const result = await bundleWithEsbuild(files, entryPoint, externals, target, minify, sourcemap);
+    const result = await bundleWithEsbuild(
+      files,
+      entryPoint,
+      externals,
+      target,
+      minify,
+      sourcemap,
+      nodejsCompat
+    );
+
+    // Add wrangler config if a config file was found
+    if (wranglerConfig !== undefined) {
+      result.wranglerConfig = wranglerConfig;
+    }
 
     // Add install warnings to result
     if (installWarnings.length > 0) {
@@ -62,6 +81,11 @@ export async function createWorker(options: CreateWorkerOptions): Promise<Create
     // No bundling - transform files and resolve dependencies
     // Note: sourcemaps are not supported in transform mode (output mirrors input structure)
     const result = await transformAndResolve(files, entryPoint, externals);
+
+    // Add wrangler config if a config file was found
+    if (wranglerConfig !== undefined) {
+      result.wranglerConfig = wranglerConfig;
+    }
 
     // Add install warnings to result
     if (installWarnings.length > 0) {
@@ -423,7 +447,8 @@ async function bundleWithEsbuild(
   externals: string[],
   target: string,
   minify: boolean,
-  sourcemap: boolean
+  sourcemap: boolean,
+  nodejsCompat: boolean
 ): Promise<CreateWorkerResult> {
   // Ensure esbuild is initialized (happens lazily on first use)
   await initializeEsbuild();
@@ -501,7 +526,7 @@ async function bundleWithEsbuild(
     bundle: true,
     write: false,
     format: 'esm',
-    platform: 'browser', // TODO: this should be configurable
+    platform: nodejsCompat ? 'node' : 'browser',
     target,
     minify,
     sourcemap: sourcemap ? 'inline' : false,
