@@ -313,8 +313,11 @@ async function runWorker() {
     const result = await response.json();
 
     if (result.error) {
-      setStatus('error', 'Error');
+      setStatus('error', 'Bundle Error');
       showError(result.error, result.stack);
+    } else if (result.workerError) {
+      setStatus('error', 'Runtime Error');
+      showResult(result);
     } else {
       setStatus('success', 'Success');
       showResult(result);
@@ -345,21 +348,37 @@ function showError(message, stack) {
 }
 
 function showResult(result) {
-  const { bundleInfo, response, executionTime } = result;
+  const { bundleInfo, response, workerError, executionTime } = result;
 
   let responseBody = response.body;
   try {
     responseBody = JSON.stringify(JSON.parse(response.body), null, 2);
   } catch {}
 
-  output.innerHTML = `
-    <div class="output-section">
-      <div class="output-label">Response (${response.status})</div>
-      <div class="response-preview">
-        <div class="response-headers">Content-Type: ${response.headers['content-type'] || 'text/plain'}</div>
-        <div class="output-content success">${escapeHtml(responseBody)}</div>
+  // Build the response section - show error if worker threw, otherwise show response
+  let responseSection;
+  if (workerError) {
+    responseSection = `
+      <div class="output-section">
+        <div class="output-label">Worker Error</div>
+        <div class="output-content error">${escapeHtml(workerError.message)}</div>
+        ${workerError.stack ? `<div class="output-content error" style="margin-top: 12px; opacity: 0.7">${escapeHtml(workerError.stack)}</div>` : ''}
       </div>
-    </div>
+    `;
+  } else {
+    responseSection = `
+      <div class="output-section">
+        <div class="output-label">Response (${response.status})</div>
+        <div class="response-preview">
+          <div class="response-headers">Content-Type: ${response.headers['content-type'] || 'text/plain'}</div>
+          <div class="output-content success">${escapeHtml(responseBody)}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  output.innerHTML = `
+    ${responseSection}
     
     <div class="output-section">
       <div class="output-label">Bundle Info</div>

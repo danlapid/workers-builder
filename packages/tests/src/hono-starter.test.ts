@@ -336,18 +336,11 @@ export default app
   }, 60000);
 });
 
-// Note: Full bundling tests are skipped in vitest-pool-workers because:
-// 1. The test environment doesn't allow WASM compilation even at module init
-// 2. initializeBundler() must be called at true global scope in a real Worker
-//
-// To test bundling, use the playground (examples/basic) or run in a real Worker.
-// The initializeBundler() API is designed for real Cloudflare Workers deployment.
 describe('Hono Starter Full Bundling', () => {
   it('should bundle with esbuild-wasm and tree-shake', async () => {
     const result = await createWorker({
       files: HONO_STARTER_FILES,
       bundle: true,
-      strictBundling: true, // Throw if bundling fails - we want to see the error
       fetchDependencies: true,
     });
 
@@ -373,4 +366,48 @@ describe('Hono Starter Full Bundling', () => {
     // Should NOT have warnings about missing modules
     expect(result.warnings).toBeUndefined();
   }, 120000); // 2 minute timeout for bundling + npm fetch
+
+  it('should generate inline sourcemaps when enabled', async () => {
+    const result = await createWorker({
+      files: HONO_STARTER_FILES,
+      bundle: true,
+      sourcemap: true,
+      fetchDependencies: true,
+    });
+
+    expect(result.mainModule).toBe('bundle.js');
+    const bundleContent = result.modules['bundle.js'] as string;
+
+    // Should contain inline sourcemap comment
+    expect(bundleContent).toContain('//# sourceMappingURL=data:application/json;base64,');
+
+    // Decode and verify sourcemap structure
+    // Use a more flexible regex that handles multiline
+    const sourcemapMatch = bundleContent.match(
+      /\/\/# sourceMappingURL=data:application\/json;base64,([A-Za-z0-9+/=]+)/
+    );
+    expect(sourcemapMatch).not.toBeNull();
+
+    const sourcemapJson = atob(sourcemapMatch![1]);
+    const sourcemap = JSON.parse(sourcemapJson);
+
+    // Verify sourcemap has required fields
+    expect(sourcemap.version).toBe(3);
+    expect(sourcemap.sources).toBeDefined();
+    expect(Array.isArray(sourcemap.sources)).toBe(true);
+    expect(sourcemap.mappings).toBeDefined();
+  }, 120000);
+
+  it('should not include sourcemaps by default', async () => {
+    const result = await createWorker({
+      files: HONO_STARTER_FILES,
+      bundle: true,
+      fetchDependencies: true,
+    });
+
+    const bundleContent = result.modules['bundle.js'] as string;
+
+    // Should NOT contain sourcemap
+    expect(bundleContent).not.toContain('//# sourceMappingURL=');
+  }, 120000);
 });

@@ -60,8 +60,9 @@ export async function createWorker(options: CreateWorkerOptions): Promise<Create
 
     return result;
   } else {
-    // No bundling or bundling failed - transform files and resolve dependencies
-    const result = await transformAndResolve(files, entryPoint, externals, sourcemap);
+    // No bundling - transform files and resolve dependencies
+    // Note: sourcemaps are not supported in transform mode (output mirrors input structure)
+    const result = await transformAndResolve(files, entryPoint, externals);
 
     // Add install warnings to result
     if (installWarnings.length > 0) {
@@ -79,8 +80,7 @@ export async function createWorker(options: CreateWorkerOptions): Promise<Create
 async function transformAndResolve(
   files: Files,
   entryPoint: string,
-  externals: string[],
-  sourcemap: boolean
+  externals: string[]
 ): Promise<CreateWorkerResult> {
   const modules: Modules = {};
   const warnings: string[] = [];
@@ -157,7 +157,6 @@ async function transformAndResolve(
       try {
         const result = transformCode(content, {
           filePath: sourcePath,
-          sourceMap: sourcemap,
         });
         transformedCode = result.code;
       } catch (error) {

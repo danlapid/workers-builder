@@ -31,7 +31,6 @@ export default {
           files,
           bundle: true,
           fetchDependencies: true,
-          strictBundling: true,
         });
 
         // Create and run the dynamic worker
@@ -54,8 +53,40 @@ export default {
           method: 'GET',
         });
 
-        const workerResponse = await entrypoint.fetch(testRequest);
-        const responseBody = await workerResponse.text();
+        let workerResponse: Response;
+        let responseBody: string;
+        let workerError: { message: string; stack?: string | undefined } | null = null;
+
+        try {
+          workerResponse = await entrypoint.fetch(testRequest);
+          responseBody = await workerResponse.text();
+
+          // Check if the worker returned a 500 error - this often indicates an uncaught exception
+          // The Worker runtime catches exceptions and returns "Internal Server Error"
+          if (workerResponse.status >= 500) {
+            // Try to extract error information from the response
+            if (responseBody === 'Internal Server Error') {
+              workerError = {
+                message: 'Worker threw an uncaught exception.',
+              };
+            } else if (responseBody) {
+              // The response body might contain error details
+              workerError = {
+                message: responseBody,
+              };
+            }
+          }
+        } catch (error) {
+          // Worker execution failed - return this as a runtime error
+          const stack = error instanceof Error ? error.stack : undefined;
+          workerError = {
+            message: error instanceof Error ? error.message : String(error),
+            ...(stack && { stack }),
+          };
+          // Create a synthetic error response
+          workerResponse = new Response('Worker execution failed', { status: 500 });
+          responseBody = '';
+        }
         const executionTime = Date.now() - startTime;
 
         // Get response headers
@@ -76,6 +107,7 @@ export default {
               headers: responseHeaders,
               body: responseBody,
             },
+            workerError,
             executionTime,
           }),
           {

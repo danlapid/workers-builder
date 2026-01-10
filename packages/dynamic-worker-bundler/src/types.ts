@@ -59,7 +59,9 @@ export interface CreateWorkerOptions {
   minify?: boolean;
 
   /**
-   * Source map generation
+   * Generate inline source maps for better debugging and error stack traces.
+   * Only applies when `bundle: true`. Has no effect in transform-only mode
+   * since the output closely mirrors the input structure.
    * @default false
    */
   sourcemap?: boolean;
