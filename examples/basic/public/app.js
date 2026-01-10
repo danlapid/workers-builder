@@ -22,6 +22,8 @@ const closeGithubModalBtn = document.getElementById('closeGithubModal');
 const githubUrlInput = document.getElementById('githubUrl');
 const cancelGithubBtn = document.getElementById('cancelGithub');
 const confirmGithubBtn = document.getElementById('confirmGithub');
+const bundleOption = document.getElementById('bundleOption');
+const minifyOption = document.getElementById('minifyOption');
 
 // Examples
 const EXAMPLES = {
@@ -307,6 +309,10 @@ async function runWorker() {
       body: JSON.stringify({
         files,
         version: ++workerVersion,
+        options: {
+          bundle: bundleOption.checked,
+          minify: minifyOption.checked,
+        },
       }),
     });
 

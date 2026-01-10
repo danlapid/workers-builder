@@ -19,9 +19,13 @@ export default {
     // API endpoint to run workers
     if (url.pathname === '/api/run' && request.method === 'POST') {
       try {
-        const { files, version } = (await request.json()) as {
+        const { files, version, options } = (await request.json()) as {
           files: Record<string, string>;
           version: number;
+          options?: {
+            bundle?: boolean;
+            minify?: boolean;
+          };
         };
 
         const startTime = Date.now();
@@ -29,7 +33,8 @@ export default {
         // Bundle the worker with esbuild (dependencies are auto-installed from package.json)
         const { mainModule, modules, wranglerConfig, warnings } = await createWorker({
           files,
-          bundle: true,
+          bundle: options?.bundle ?? true,
+          minify: options?.minify ?? false,
         });
 
         // Create and run the dynamic worker

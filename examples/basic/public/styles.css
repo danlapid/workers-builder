@@ -188,10 +188,39 @@ h1 {
 /* Controls */
 .controls {
   display: flex;
+  align-items: center;
   gap: 8px;
   padding: 12px 16px;
   background: var(--bg-tertiary);
   border-top: 1px solid var(--border);
+}
+
+.controls-options {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.813rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.checkbox-label:hover {
+  color: var(--text-primary);
 }
 
 .btn {
@@ -676,12 +705,6 @@ h1 {
 }
 
 /* Button loading state */
-.btn-loading {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .btn-loading .spinner {
   width: 14px;
   height: 14px;
