@@ -503,3 +503,19 @@ function isTextFile(path: string): boolean {
 
   return textExtensions.some((ext) => path.toLowerCase().endsWith(ext));
 }
+
+/**
+ * Check if files contain a package.json with dependencies that need installing.
+ */
+export function hasDependencies(files: Files): boolean {
+  const packageJson = files['package.json'];
+  if (!packageJson) return false;
+
+  try {
+    const pkg = JSON.parse(packageJson);
+    const deps = pkg.dependencies ?? {};
+    return Object.keys(deps).length > 0;
+  } catch {
+    return false;
+  }
+}
