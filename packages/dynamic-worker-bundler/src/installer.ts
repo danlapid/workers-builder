@@ -137,8 +137,6 @@ async function installPackage(
     return;
   }
 
-  onProgress?.(`Installing ${name}@${versionRange}...`);
-
   try {
     // Fetch package metadata from registry
     const metadata = await fetchPackageMetadata(name, registry);

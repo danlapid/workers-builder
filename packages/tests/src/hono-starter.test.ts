@@ -342,7 +342,7 @@ export default app
 //
 // To test bundling, use the playground (examples/basic) or run in a real Worker.
 // The initializeBundler() API is designed for real Cloudflare Workers deployment.
-describe.skip('Hono Starter Full Bundling', () => {
+describe('Hono Starter Full Bundling', () => {
   it('should bundle with esbuild-wasm and tree-shake', async () => {
     const result = await createWorker({
       files: HONO_STARTER_FILES,
