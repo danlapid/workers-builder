@@ -1,108 +1,71 @@
-# AGENTS.md - Developer Documentation
+# Developer Documentation
 
 ## Overview
 
-**dynamic-worker-bundler** bundles source files for Cloudflare's Worker Loader binding, enabling dynamic Worker spawning at runtime.
-
-## Repository Structure
-
-```
-dynamic-worker-bundler/
-├── packages/
-│   ├── dynamic-worker-bundler/     # Main library
-│   │   ├── src/
-│   │   │   ├── index.ts            # Public exports (createWorker + types)
-│   │   │   ├── bundler.ts          # Main createWorker() orchestration
-│   │   │   ├── config.ts           # Wrangler config parsing (toml/json/jsonc)
-│   │   │   ├── installer.ts        # npm package fetching & extraction
-│   │   │   ├── transformer.ts      # TypeScript/JSX transformation (Sucrase)
-│   │   │   ├── resolver.ts         # Module resolution & import parsing
-│   │   │   └── types.ts            # TypeScript interfaces
-│   │   └── dist/                   # Built output
-│   │
-│   └── tests/                      # Test package (vitest + workerd)
-│       ├── src/
-│       │   ├── bundler.test.ts     # Unit tests for createWorker
-│       │   └── hono-starter.test.ts # E2E tests with real npm deps
-│       └── vitest.config.ts
-│
-├── examples/basic/                 # Interactive playground
-└── biome.json                      # Linting config
-```
+Bundles source files for Cloudflare's Worker Loader binding, enabling dynamic Worker spawning at runtime.
 
 ## Commands
 
 ```bash
 pnpm install        # Install dependencies
-pnpm run build      # Build the library  
+pnpm run build      # Build the library
 pnpm run test       # Run tests
 pnpm run check      # Lint/format check
+```
+
+## Repository Structure
+
+```
+packages/
+├── dynamic-worker-bundler/   # Main library
+│   └── src/
+│       ├── index.ts          # Public exports
+│       ├── bundler.ts        # Main createWorker() orchestration
+│       ├── config.ts         # Wrangler config parsing
+│       ├── installer.ts      # npm package fetching
+│       ├── resolver.ts       # Module resolution
+│       ├── transformer.ts    # TypeScript/JSX transform
+│       └── types.ts          # TypeScript interfaces
+├── tests/                    # Vitest + workerd tests
+└── examples/basic/           # Interactive playground
 ```
 
 ## Architecture
 
 ```
 createWorker(options)
-├── parseWranglerConfig(files)     # Extract compatibility settings
 │
-├── hasDependencies(files)?
-│   └── installDependencies()      # Fetch from npm registry
-│       ├── fetchPackageMetadata() # Get package info
-│       ├── resolveVersion()       # Resolve semver
-│       └── fetchPackageFiles()    # Download & extract tarball
+├─ parseWranglerConfig()      # Parse wrangler.toml/json/jsonc
 │
-├── detectEntryPoint(files, config) # From wrangler main, package.json, or defaults
+├─ installDependencies()?     # If package.json has dependencies
+│  └─ Fetch from npm registry, extract tarballs
 │
-└── bundle: true?
-    ├── bundleWithEsbuild()        # Single file output
-    │   └── virtualFsPlugin        # In-memory file resolution
-    │   └── platform: node/browser # Based on nodejs_compat flag
-    │
-    └── (fallback) transformAndResolve()
-        ├── parseImports()         # Find dependencies  
-        ├── resolveModule()        # Resolve paths
-        └── transformCode()        # TS/JSX → JS
+├─ detectEntryPoint()         # Priority: option > wrangler main > package.json > defaults
+│
+└─ bundle?
+   ├─ bundleWithEsbuild()     # esbuild-wasm with virtual FS plugin
+   └─ transformAndResolve()   # Fallback: Sucrase transform + import rewriting
 ```
 
 ## Source Files
 
-### `bundler.ts`
-Main orchestration. Key functions:
-- `createWorker()` - Public API entry point
-- `hasDependencies()` - Check if package.json has deps
-- `detectEntryPoint()` - Find entry from package.json or defaults
-- `bundleWithEsbuild()` - esbuild-wasm bundling with virtual FS plugin
-- `transformAndResolve()` - Transform-only mode (no bundling)
-- `rewriteImports()` - Rewrite import paths to absolute
+### bundler.ts
+Main orchestration: `createWorker()`, entry point detection, esbuild bundling, transform fallback.
 
-### `config.ts`
-Wrangler configuration parsing (uses smol-toml for TOML):
-- `parseWranglerConfig()` - Parse wrangler.toml/json/jsonc from files
-- `hasNodejsCompat()` - Check if nodejs_compat flag is enabled
-- Extracts `main`, `compatibility_date`, and `compatibility_flags` for Worker Loader
+### config.ts
+Parses `wrangler.toml` (smol-toml), `wrangler.json`, `wrangler.jsonc`. Extracts `main`, `compatibility_date`, `compatibility_flags`.
 
-### `installer.ts`
-Fetches npm packages into virtual `node_modules/`:
-- `installDependencies()` - Main entry, handles transitive deps
-- `fetchPackageMetadata()` - GET from registry.npmjs.org
-- `resolveVersion()` - Simple semver resolution (^, ~, exact)
-- `fetchPackageFiles()` - Download tarball, extract with DecompressionStream
-- `parseTar()` - Custom tar parser for .tgz extraction
+### installer.ts
+Fetches npm packages: metadata lookup, semver resolution, tarball extraction via `DecompressionStream`.
 
-### `transformer.ts`
-TypeScript/JSX transformation via Sucrase:
-- `transformCode()` - Main transform function
-- `isTypeScriptFile()` - Check .ts/.tsx/.mts
-- `isJavaScriptFile()` - Check .js/.jsx/.mjs
-- `getOutputPath()` - .ts → .js, .mts → .mjs
+### transformer.ts
+Sucrase-based TypeScript/JSX transform. Pure JS, no WASM dependency.
 
-### `resolver.ts`
-Node.js-style module resolution:
-- `resolveModule()` - Resolve import specifier to file path
-- `parseImports()` - Regex-based import extraction
-- Uses `resolve.exports` for package.json exports field
+### resolver.ts
+Node.js-style module resolution. Uses `resolve.exports` for package.json exports field.
 
-### `types.ts`
+## Key Types
+
 ```typescript
 interface CreateWorkerOptions {
   files: Record<string, string>;
@@ -110,8 +73,8 @@ interface CreateWorkerOptions {
   bundle?: boolean;        // default: true
   externals?: string[];
   target?: string;         // default: 'es2022'
-  minify?: boolean;        // default: false
-  sourcemap?: boolean;     // default: false (bundle mode only)
+  minify?: boolean;
+  sourcemap?: boolean;
 }
 
 interface WranglerConfig {
@@ -123,49 +86,28 @@ interface WranglerConfig {
 interface CreateWorkerResult {
   mainModule: string;
   modules: Record<string, string | Module>;
-  wranglerConfig?: WranglerConfig;  // From wrangler.toml/json/jsonc
+  wranglerConfig?: WranglerConfig;
   warnings?: string[];
 }
 ```
-
-## Key Design Decisions
-
-### Why npm registry over esm.sh CDN?
-esm.sh had issues with transitive dependencies. Direct npm registry fetch works reliably in transform-only mode.
-
-### Why Sucrase over Babel/TypeScript?
-Sucrase is pure JS (no WASM), ~20x faster than Babel, and sufficient for type stripping + JSX transform.
-
-### Why transform-only fallback?
-esbuild-wasm requires WASM compilation which can fail in some environments. Sucrase-based transform always works.
-
-### Why virtual file system?
-Worker Loader expects modules as strings. Users provide code from various sources. No filesystem in Workers.
 
 ## Testing
 
 Tests run in workerd via `@cloudflare/vitest-pool-workers`:
 
-- **bundler.test.ts** - Unit tests for TypeScript transform, module resolution, import rewriting
-- **hono-starter.test.ts** - E2E tests that actually fetch hono from npm and verify the full pipeline
+- `bundler.test.ts` — Unit tests for transform, resolution, config parsing
+- `hono-starter.test.ts` — E2E tests with real npm dependencies
 
-```bash
-pnpm run test  # Builds library first, then runs tests
+
+## Public Exports
+
+```typescript
+export { createWorker } from './bundler.js';
+export type {
+  CreateWorkerOptions,
+  CreateWorkerResult,
+  Files,
+  Modules,
+  WranglerConfig
+} from './types.js';
 ```
-
-## Known Limitations
-
-1. **esbuild-wasm** - Can fail in wrangler dev; falls back to transform-only
-2. **Node.js APIs** - Requires `nodejs_compat` flag in wrangler config
-3. **npm latency** - First install requires network fetch
-4. **Memory** - Large packages may exceed Worker limits
-5. **Sourcemaps** - Only work in bundle mode
-
-## Public API
-
-Only exports:
-- `createWorker` - Main function
-- `CreateWorkerOptions` - Options type
-- `CreateWorkerResult` - Result type  
-- `Files` - Input files type
-- `Modules` - Output modules type

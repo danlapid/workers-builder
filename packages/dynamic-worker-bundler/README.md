@@ -1,14 +1,6 @@
 # dynamic-worker-bundler
 
-Bundle and transform source files for Cloudflare's [Worker Loader binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/worker-loader/) (closed beta). Dynamically spawn Workers with arbitrary code at runtime.
-
-## Features
-
-- **TypeScript/JSX** - Transforms `.ts`, `.tsx`, `.jsx` using Sucrase
-- **npm dependencies** - Auto-installs packages from npm registry when `package.json` has dependencies  
-- **Bundling** - Bundles everything into a single file with esbuild-wasm (with transform-only fallback)
-- **Module resolution** - Resolves imports with `package.json` exports support
-- **Wrangler config** - Parses `wrangler.toml/json/jsonc` to extract `compatibilityDate` and `compatibilityFlags`
+Bundle source files for Cloudflare's [Worker Loader binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/worker-loader/) (closed beta). Dynamically spawn Workers at runtime.
 
 ## Installation
 
@@ -16,28 +8,31 @@ Bundle and transform source files for Cloudflare's [Worker Loader binding](https
 npm install dynamic-worker-bundler
 ```
 
-## Quick Start
+## Usage
 
 ```typescript
 import { createWorker } from 'dynamic-worker-bundler';
 
-// Bundle your source files
 const { mainModule, modules, wranglerConfig } = await createWorker({
   files: {
     'src/index.ts': `
       export default {
-        fetch: () => new Response('Hello from dynamic worker!')
+        fetch: () => new Response('Hello!')
       }
     `,
-    'wrangler.toml': `compatibility_date = "2026-01-01"`,
+    'wrangler.toml': `
+      main = "src/index.ts"
+      compatibility_date = "2024-01-01"
+    `,
   },
 });
 
-// Use with Worker Loader binding (config extracted from wrangler.toml)
+// Use with Worker Loader binding
 const worker = env.LOADER.get('my-worker', async () => ({
   mainModule,
   modules,
-  compatibilityDate: wranglerConfig?.compatibilityDate,
+  compatibilityDate: wranglerConfig?.compatibilityDate ?? '2024-01-01',
+  compatibilityFlags: wranglerConfig?.compatibilityFlags,
 }));
 
 await worker.getEntrypoint().fetch(request);
@@ -45,31 +40,49 @@ await worker.getEntrypoint().fetch(request);
 
 ## API
 
-### `createWorker(options): Promise<CreateWorkerResult>`
+### `createWorker(options)`
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `files` | `Record<string, string>` | *required* | Source files (path → content) |
-| `entryPoint` | `string` | auto-detected | Entry point path (detected from wrangler.toml `main`, package.json, or defaults) |
+| `entryPoint` | `string` | auto | Override entry point detection |
 | `bundle` | `boolean` | `true` | Bundle into single file |
 | `externals` | `string[]` | `[]` | Modules to exclude from bundle |
 | `minify` | `boolean` | `false` | Minify output |
 | `sourcemap` | `boolean` | `false` | Generate inline source maps |
 
-Returns:
+### Returns
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `mainModule` | `string` | Entry point module path |
-| `modules` | `Record<string, string \| Module>` | All bundled modules |
-| `wranglerConfig` | `WranglerConfig?` | Parsed config from `wrangler.toml/json/jsonc` |
-| `warnings` | `string[]?` | Any warnings during bundling |
+```typescript
+{
+  mainModule: string;              // Entry point path
+  modules: Record<string, string>; // All modules
+  wranglerConfig?: {               // Parsed from wrangler.toml/json/jsonc
+    main?: string;
+    compatibilityDate?: string;
+    compatibilityFlags?: string[];
+  };
+  warnings?: string[];
+}
+```
 
-`wranglerConfig` is `undefined` if no config file exists, `{}` if config exists but has no relevant fields, or contains `main`, `compatibilityDate`, and/or `compatibilityFlags` if present. The `main` field is used for entry point detection. You must handle these cases and provide defaults as needed.
+**Entry point detection order:** `entryPoint` option → wrangler `main` → package.json → defaults (`src/index.ts`, etc.)
+
+**`wranglerConfig`:** `undefined` if no config file, `{}` if file exists but empty, or contains parsed fields.
+
+## Features
+
+**TypeScript/JSX** — Transforms `.ts`, `.tsx`, `.jsx` via Sucrase
+
+**npm dependencies** — Auto-installs from registry when `package.json` has dependencies
+
+**Wrangler config** — Parses `wrangler.toml`, `wrangler.json`, or `wrangler.jsonc`
+
+**Bundling** — Uses esbuild-wasm with transform-only fallback
 
 ## Examples
 
-### With npm Dependencies
+### With Dependencies
 
 ```typescript
 const { mainModule, modules } = await createWorker({
@@ -77,7 +90,7 @@ const { mainModule, modules } = await createWorker({
     'src/index.ts': `
       import { Hono } from 'hono';
       const app = new Hono();
-      app.get('/', (c) => c.text('Hello Hono!'));
+      app.get('/', (c) => c.text('Hello!'));
       export default app;
     `,
     'package.json': JSON.stringify({
@@ -87,74 +100,28 @@ const { mainModule, modules } = await createWorker({
 });
 ```
 
-### Multi-file Project
-
-```typescript
-const { mainModule, modules } = await createWorker({
-  files: {
-    'src/index.ts': `
-      import { greet } from './utils';
-      export default { fetch: () => new Response(greet('World')) }
-    `,
-    'src/utils.ts': `
-      export const greet = (name: string) => 'Hello, ' + name + '!';
-    `,
-  },
-});
-```
-
 ### Transform-only Mode
-
-Skip bundling to keep modules separate:
 
 ```typescript
 const { mainModule, modules } = await createWorker({
   files: { /* ... */ },
   bundle: false,
 });
-// modules contains individual transformed files
 ```
 
 ## Worker Loader Setup
 
-Configure the binding in `wrangler.toml`:
-
 ```toml
+# wrangler.toml
 [[worker_loaders]]
 binding = "LOADER"
 ```
-
-Then use in your Worker:
 
 ```typescript
 interface Env {
   LOADER: WorkerLoader;
 }
-
-export default {
-  async fetch(request: Request, env: Env) {
-    const { mainModule, modules, wranglerConfig } = await createWorker({
-      files: { /* ... */ }
-    });
-    
-    const worker = env.LOADER.get('worker-name', async () => ({
-      mainModule,
-      modules,
-      // Handle wranglerConfig - provide defaults if not set
-      compatibilityDate: wranglerConfig?.compatibilityDate ?? '2026-01-01',
-      compatibilityFlags: wranglerConfig?.compatibilityFlags ?? [],
-    }));
-    
-    return worker.getEntrypoint().fetch(request);
-  }
-}
 ```
-
-## Limitations
-
-- **No Node.js built-ins** - Requires `nodejs_compat` flag in wrangler config for Node.js built-in imports
-- **Memory limits** - Very large npm packages may exceed Worker memory
-- **Network latency** - First dependency install requires npm registry fetch
 
 ## License
 
