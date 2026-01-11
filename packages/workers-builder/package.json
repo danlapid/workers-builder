@@ -1,6 +1,6 @@
 {
   "name": "workers-builder",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Build and bundle Workers at runtime for Cloudflare Worker Loader binding",
   "repository": {
     "type": "git",
