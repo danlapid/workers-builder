@@ -12,6 +12,6 @@
     "wrangler": "catalog:"
   },
   "dependencies": {
-    "dynamic-worker-bundler": "workspace:*"
+    "workers-builder": "workspace:*"
   }
 }

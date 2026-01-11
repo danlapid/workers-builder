@@ -9,6 +9,31 @@ import * as semver from 'semver';
 import type { Files } from './types.js';
 
 const NPM_REGISTRY = 'https://registry.npmjs.org';
+const DEFAULT_TIMEOUT_MS = 30000; // 30 seconds
+
+/**
+ * Fetch with a timeout.
+ * Throws an error if the request takes longer than the specified timeout.
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = DEFAULT_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeoutMs}ms: ${url}`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 interface PackageJson {
   name: string;
@@ -206,7 +231,7 @@ async function fetchPackageMetadata(name: string, registry: string): Promise<Npm
   const encodedName = name.startsWith('@') ? `@${encodeURIComponent(name.slice(1))}` : name;
   const url = `${registry}/${encodedName}`;
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       Accept: 'application/json',
     },
@@ -258,8 +283,8 @@ async function fetchPackageFiles(
     throw new Error(`No tarball URL for ${name}`);
   }
 
-  // Fetch the tarball
-  const response = await fetch(tarballUrl);
+  // Fetch the tarball (use longer timeout for potentially large packages)
+  const response = await fetchWithTimeout(tarballUrl, {}, DEFAULT_TIMEOUT_MS * 2);
   if (!response.ok) {
     throw new Error(`Failed to fetch tarball: ${response.status}`);
   }

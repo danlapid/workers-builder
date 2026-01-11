@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  hasDependencies,
-  installDependencies,
-} from '../../dynamic-worker-bundler/src/installer.js';
+import { hasDependencies, installDependencies } from '../../workers-builder/src/installer.js';
 
 /**
  * Create a minimal tar archive with the given files.
@@ -765,5 +762,52 @@ describe('installDependencies', () => {
     expect(result.files['README.md']).toBe(originalFiles['README.md']);
     // New files should be added
     expect(result.files['node_modules/preserve-test/index.js']).toBeDefined();
+  });
+
+  it('should handle abort errors gracefully', async () => {
+    // Simulate an aborted fetch (which is what happens on timeout)
+    mockFetch.mockImplementation(async () => {
+      const error = new Error('The operation was aborted');
+      error.name = 'AbortError';
+      throw error;
+    });
+
+    const files = {
+      'package.json': JSON.stringify({
+        dependencies: { 'abort-pkg': '^1.0.0' },
+      }),
+    };
+
+    // installDependencies should handle abort errors gracefully via warnings
+    const result = await installDependencies(files);
+
+    expect(result.installed).toEqual([]);
+    expect(result.warnings.length).toBeGreaterThan(0);
+    // Should contain the package name in the error
+    expect(result.warnings[0]).toMatch(/abort-pkg/);
+  });
+
+  it('should pass abort signal to fetch', async () => {
+    // Verify that fetch is called with an AbortSignal
+    let receivedSignal: AbortSignal | undefined;
+
+    mockFetch.mockImplementation(async (_url: string, options?: RequestInit) => {
+      receivedSignal = options?.signal as AbortSignal | undefined;
+      return new Response(
+        JSON.stringify(createPackageMetadata('signal-test', [{ version: '1.0.0' }]))
+      );
+    });
+
+    const files = {
+      'package.json': JSON.stringify({
+        dependencies: { 'signal-test': '^1.0.0' },
+      }),
+    };
+
+    await installDependencies(files);
+
+    // Verify fetch was called with an AbortSignal
+    expect(receivedSignal).toBeDefined();
+    expect(receivedSignal).toBeInstanceOf(AbortSignal);
   });
 });

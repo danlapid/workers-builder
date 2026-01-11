@@ -1,1 +1,1 @@
-packages/dynamic-worker-bundler/README.md
+packages/workers-builder/README.md

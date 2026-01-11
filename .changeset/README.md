@@ -26,9 +26,9 @@ When PRs with changesets are merged to `main`:
 
 ## Packages managed by changesets
 
-- `dynamic-worker-bundler` - Core bundler library
+- `workers-builder` - Core bundler library
 
 ## Ignored packages (not published)
 
-- `dynamic-worker-bundler-tests` - Internal tests
+- `workers-builder-tests` - Internal tests
 - `basic-example` - Example project

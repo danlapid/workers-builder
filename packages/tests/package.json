@@ -1,5 +1,5 @@
 {
-  "name": "dynamic-worker-bundler-tests",
+  "name": "workers-builder-tests",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,6 +15,6 @@
     "wrangler": "catalog:"
   },
   "dependencies": {
-    "dynamic-worker-bundler": "workspace:*"
+    "workers-builder": "workspace:*"
   }
 }

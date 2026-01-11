@@ -1,8 +1,8 @@
 ---
-"dynamic-worker-bundler": minor
+"workers-builder": minor
 ---
 
-Initial release of dynamic-worker-bundler
+Initial release of workers-builder
 
 Features:
 - `createWorker()` function to bundle source files for Worker Loader binding

@@ -1,4 +1,4 @@
-import { createWorker } from 'dynamic-worker-bundler';
+import { createWorker } from 'workers-builder';
 
 interface GitHubContent {
   name: string;
@@ -265,7 +265,7 @@ async function fetchGitHubDirectory(
     const response = await fetch(apiUrl, {
       headers: {
         Accept: 'application/vnd.github.v3+json',
-        'User-Agent': 'dynamic-worker-bundler-playground',
+        'User-Agent': 'workers-builder-playground',
       },
     });
 

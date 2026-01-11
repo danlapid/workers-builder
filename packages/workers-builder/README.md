@@ -1,17 +1,17 @@
-# dynamic-worker-bundler
+# workers-builder
 
 Bundle source files for Cloudflare's [Worker Loader binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/worker-loader/) (closed beta).
 
 ## Installation
 
 ```bash
-npm install dynamic-worker-bundler
+npm install workers-builder
 ```
 
 ## Quick Start
 
 ```typescript
-import { createWorker } from 'dynamic-worker-bundler';
+import { createWorker } from 'workers-builder';
 
 const { mainModule, modules, wranglerConfig } = await createWorker({
   files: {

@@ -1,5 +1,5 @@
-import { createWorker } from 'dynamic-worker-bundler';
 import { describe, expect, it } from 'vitest';
+import { createWorker } from 'workers-builder';
 
 describe('createWorker', () => {
   describe('TypeScript transformation', () => {

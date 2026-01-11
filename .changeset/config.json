@@ -1,11 +1,11 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
-  "changelog": ["@changesets/changelog-github", { "repo": "danlapid/dynamic-worker-bundler" }],
+  "changelog": ["@changesets/changelog-github", { "repo": "cloudflare/workers-builder" }],
   "commit": false,
   "fixed": [],
   "linked": [],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["dynamic-worker-bundler-tests", "basic-example"]
+  "ignore": ["workers-builder-tests", "basic-example"]
 }

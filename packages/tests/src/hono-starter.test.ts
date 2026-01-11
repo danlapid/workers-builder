@@ -10,8 +10,9 @@
  *
  * Based on: https://github.com/honojs/starter/tree/main/templates/cloudflare-workers
  */
-import { createWorker } from 'dynamic-worker-bundler';
+
 import { describe, expect, it } from 'vitest';
+import { createWorker } from 'workers-builder';
 
 // ============================================================================
 // Test Input: Hono Starter Template

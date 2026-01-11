@@ -17,7 +17,7 @@ pnpm run check      # Lint/format check
 
 ```
 packages/
-├── dynamic-worker-bundler/   # Main library
+├── workers-builder/   # Main library
 │   └── src/
 │       ├── index.ts          # createWorker() orchestration + exports
 │       ├── bundler.ts        # esbuild-wasm bundling

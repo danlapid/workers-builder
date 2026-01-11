@@ -9,7 +9,7 @@
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-const PACKAGES = ['packages/dynamic-worker-bundler'];
+const PACKAGES = ['packages/workers-builder'];
 
 function getPackageInfo(dir) {
   const pkg = JSON.parse(readFileSync(`${dir}/package.json`, 'utf8'));

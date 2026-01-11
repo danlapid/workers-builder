@@ -1,7 +1,7 @@
 {
-  "name": "dynamic-worker-bundler",
+  "name": "workers-builder",
   "version": "0.0.1",
-  "description": "Bundle and resolve modules for Cloudflare Worker Loader binding",
+  "description": "Build and bundle Workers at runtime for Cloudflare Worker Loader binding",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
