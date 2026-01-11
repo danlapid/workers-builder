@@ -2,6 +2,12 @@
 let files = {};
 let currentFile = null;
 let workerVersion = 0;
+let lastRunFilesSnapshot = null;
+
+// Compute a simple hash of the files object to detect changes
+function computeFilesSnapshot() {
+  return JSON.stringify(files);
+}
 
 // DOM elements
 const editor = document.getElementById('editor');
@@ -303,12 +309,19 @@ async function runWorker() {
   runBtn.disabled = true;
 
   try {
+    // Only bump version if files have changed since last run
+    const currentSnapshot = computeFilesSnapshot();
+    if (currentSnapshot !== lastRunFilesSnapshot) {
+      workerVersion++;
+      lastRunFilesSnapshot = currentSnapshot;
+    }
+
     const response = await fetch('/api/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         files,
-        version: ++workerVersion,
+        version: workerVersion,
         options: {
           bundle: bundleOption.checked,
           minify: minifyOption.checked,

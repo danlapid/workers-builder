@@ -93,34 +93,46 @@ export default {
           };
         };
 
-        // Bundle the worker with esbuild (dependencies are auto-installed from package.json)
-        const { mainModule, modules, wranglerConfig, warnings } = await createWorker({
-          files,
-          bundle: options?.bundle ?? true,
-          minify: options?.minify ?? false,
-        });
+        // Track bundle info for the response
+        let bundleInfo: BundleInfo | null = null;
 
         // Create the dynamic worker using the Worker Loader binding
-        const worker = env.LOADER.get(`playground-worker-v${version}`, async () => ({
-          mainModule,
-          modules: modules as Record<string, string>,
-          // Use wranglerConfig if available, otherwise use defaults
-          compatibilityDate: wranglerConfig?.compatibilityDate ?? '2026-01-01',
-          compatibilityFlags: wranglerConfig?.compatibilityFlags ?? [],
-          env: {
-            // Pass some example env vars
-            API_KEY: 'sk-example-key-12345',
-            DEBUG: 'true',
-          },
-          globalOutbound: null,
-        }));
+        // The async callback is only invoked if the isolate isn't already warm
+        const worker = env.LOADER.get(`playground-worker-v${version}`, async () => {
+          // Bundle the worker with esbuild (dependencies are auto-installed from package.json)
+          const { mainModule, modules, wranglerConfig, warnings } = await createWorker({
+            files,
+            bundle: options?.bundle ?? true,
+            minify: options?.minify ?? false,
+          });
+
+          bundleInfo = {
+            mainModule,
+            modules: Object.keys(modules),
+            warnings: warnings ?? [],
+          };
+
+          return {
+            mainModule,
+            modules: modules as Record<string, string>,
+            // Use wranglerConfig if available, otherwise use defaults
+            compatibilityDate: wranglerConfig?.compatibilityDate ?? '2026-01-01',
+            compatibilityFlags: wranglerConfig?.compatibilityFlags ?? [],
+            env: {
+              // Pass some example env vars
+              API_KEY: 'sk-example-key-12345',
+              DEBUG: 'true',
+            },
+            globalOutbound: null,
+          };
+        });
 
         // Execute and return response
-        return executeWorker(worker, {
-          mainModule,
-          modules: Object.keys(modules),
-          warnings: warnings ?? [],
-        });
+        // If bundleInfo is null, the isolate was already warm (cached)
+        return executeWorker(
+          worker,
+          bundleInfo ?? { mainModule: '(cached)', modules: [], warnings: [] }
+        );
       } catch (error) {
         return buildErrorResponse(error);
       }
