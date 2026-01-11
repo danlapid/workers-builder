@@ -1,8 +1,8 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   hasDependencies,
   installDependencies,
 } from '../../dynamic-worker-bundler/src/installer.js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Create a minimal tar archive with the given files.
@@ -35,7 +35,7 @@ function createTarball(files: Record<string, string>): Uint8Array {
 
     // Size (124-135) - octal, 11 chars + null
     const sizeOctal = contentBytes.length.toString(8).padStart(11, '0');
-    header.set(encoder.encode(sizeOctal + '\0'), 124);
+    header.set(encoder.encode(`${sizeOctal}\0`), 124);
 
     // Mtime (136-147) - "00000000000\0"
     header.set(encoder.encode('00000000000\0'), 136);
@@ -49,10 +49,10 @@ function createTarball(files: Record<string, string>): Uint8Array {
     // Calculate checksum (sum of all bytes, treating checksum field as spaces)
     let checksum = 0;
     for (let i = 0; i < 512; i++) {
-      checksum += header[i]!;
+      checksum += header[i] ?? 0;
     }
     const checksumOctal = checksum.toString(8).padStart(6, '0');
-    header.set(encoder.encode(checksumOctal + '\0 '), 148);
+    header.set(encoder.encode(`${checksumOctal}\0 `), 148);
 
     blocks.push(header);
 

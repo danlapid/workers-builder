@@ -41,11 +41,6 @@ interface InstallOptions {
    * Registry URL (default: https://registry.npmjs.org)
    */
   registry?: string;
-
-  /**
-   * Called when a package is being installed
-   */
-  onProgress?: (message: string) => void;
 }
 
 interface InstallResult {
@@ -79,7 +74,7 @@ export async function installDependencies(
   files: Files,
   options: InstallOptions = {}
 ): Promise<InstallResult> {
-  const { dev = false, registry = NPM_REGISTRY, onProgress } = options;
+  const { dev = false, registry = NPM_REGISTRY } = options;
 
   const result: InstallResult = {
     files: { ...files },
@@ -119,15 +114,7 @@ export async function installDependencies(
   // Install all dependencies in parallel
   await Promise.all(
     Object.entries(depsToInstall).map(([name, versionRange]) =>
-      installPackage(
-        name,
-        versionRange,
-        result,
-        installedPackages,
-        inProgress,
-        registry,
-        onProgress
-      )
+      installPackage(name, versionRange, result, installedPackages, inProgress, registry)
     )
   );
 
@@ -143,8 +130,7 @@ async function installPackage(
   result: InstallResult,
   installedPackages: Map<string, string>,
   inProgress: Map<string, Promise<void>>,
-  registry: string,
-  onProgress?: (message: string) => void
+  registry: string
 ): Promise<void> {
   // Skip if already installed
   if (installedPackages.has(name)) {
@@ -193,15 +179,7 @@ async function installPackage(
       const deps = versionMetadata.dependencies ?? {};
       await Promise.all(
         Object.entries(deps).map(([depName, depVersion]) =>
-          installPackage(
-            depName,
-            depVersion,
-            result,
-            installedPackages,
-            inProgress,
-            registry,
-            onProgress
-          )
+          installPackage(depName, depVersion, result, installedPackages, inProgress, registry)
         )
       );
     } catch (error) {
