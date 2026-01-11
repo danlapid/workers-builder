@@ -1,5 +1,101 @@
+import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
 import { createWorker } from 'workers-builder';
 import { handleGitHubImport } from './github.js';
+import { exports } from 'cloudflare:workers';
+
+// Log entry from a tail event
+interface LogEntry {
+  level: string;
+  message: string;
+  timestamp: number;
+}
+
+// Durable Object that stores logs for a specific worker
+export class LogSession extends DurableObject {
+  private logs: LogEntry[] = [];
+  private waiter: { resolve: (logs: LogEntry[]) => void; since: number } | null = null;
+
+  // Called by the tail worker to add logs
+  async addLogs(logs: LogEntry[]) {
+    this.logs.push(...logs);
+
+    // If someone is waiting for logs and we have logs since their subscription time, resolve
+    if (this.waiter) {
+      const logsSinceSubscription = this.logs.filter((log) => log.timestamp >= this.waiter!.since);
+      if (logsSinceSubscription.length > 0) {
+        this.waiter.resolve(logsSinceSubscription);
+        this.waiter = null;
+      }
+    }
+
+    // Limit log buffer size to prevent unbounded growth
+    const maxLogs = 1000;
+    if (this.logs.length > maxLogs) {
+      this.logs = this.logs.slice(-maxLogs);
+    }
+  }
+
+  // Called by the main handler to subscribe for logs
+  // Returns the subscription timestamp to use with getLogs
+  async subscribe(): Promise<number> {
+    return Date.now();
+  }
+
+  // Called by the main handler to get logs since subscription time
+  // Waits up to timeoutMs for logs to arrive
+  async getLogs(since: number, timeoutMs: number = 1000): Promise<LogEntry[]> {
+    // Check if we already have logs since the subscription time
+    const existing = this.logs.filter((log) => log.timestamp >= since);
+    if (existing.length > 0) {
+      return existing;
+    }
+
+    // Wait for logs to arrive
+    return new Promise<LogEntry[]>((resolve) => {
+      const timeout = setTimeout(() => {
+        this.waiter = null;
+        resolve([]);
+      }, timeoutMs);
+
+      this.waiter = {
+        since,
+        resolve: (logs) => {
+          clearTimeout(timeout);
+          resolve(logs);
+        },
+      };
+    });
+  }
+}
+
+interface LogTailerProps {
+  workerName: string;
+}
+
+// Tail worker entrypoint that receives logs and sends them to the DO
+export class LogTailer extends WorkerEntrypoint<never, LogTailerProps> {
+  override async tail(events: TraceItem[]) {
+    const logSessionStub = exports.LogSession.getByName(this.ctx.props.workerName);
+
+    for (const event of events) {
+      const logs: LogEntry[] = event.logs.map((log: TraceLog) => ({
+        level: log.level,
+        message: Array.isArray(log.message)
+          ? log.message
+              .map((m: unknown) => (typeof m === 'string' ? m : JSON.stringify(m)))
+              .join(' ')
+          : typeof log.message === 'string'
+            ? log.message
+            : JSON.stringify(log.message),
+        timestamp: log.timestamp,
+      }));
+
+      if (logs.length > 0) {
+        await logSessionStub.addLogs(logs);
+      }
+    }
+  }
+}
 
 interface BundleInfo {
   mainModule: string;
@@ -13,8 +109,11 @@ interface WorkerState {
 }
 
 // Execute a dynamic worker and return the full response
-// state.buildTime is populated by the callback after warmup completes
-async function executeWorker(worker: WorkerStub, state: WorkerState): Promise<Response> {
+async function executeWorker(
+  worker: WorkerStub,
+  state: WorkerState,
+  workerName: string
+): Promise<Response> {
   // Measure load time by calling a non-existent method
   // This triggers the cold start (build + load) but fails fast
   const entrypoint = worker.getEntrypoint() as Fetcher & { __warmup__: () => Promise<void> };
@@ -28,6 +127,10 @@ async function executeWorker(worker: WorkerStub, state: WorkerState): Promise<Re
 
   // After warmup, state.buildTime and state.bundleInfo are populated
   const { buildTime, bundleInfo } = state;
+
+  // Subscribe to logs AFTER warmup so we don't get warmup logs
+  const logSessionStub = exports.LogSession.getByName(workerName);
+  const subscriptionTime = await logSessionStub.subscribe();
 
   // Now measure actual execution time
   const runStart = Date.now();
@@ -63,6 +166,9 @@ async function executeWorker(worker: WorkerStub, state: WorkerState): Promise<Re
 
   const runTime = Date.now() - runStart;
 
+  // Fetch logs from the Durable Object (wait up to 1 second for tail event)
+  const logs = await logSessionStub.getLogs(subscriptionTime, 1000);
+
   // Get response headers
   const responseHeaders: Record<string, string> = {};
   workerResponse.headers.forEach((value, key) => {
@@ -77,6 +183,7 @@ async function executeWorker(worker: WorkerStub, state: WorkerState): Promise<Re
       body: responseBody,
     },
     workerError,
+    logs,
     timing: {
       buildTime,
       loadTime,
@@ -118,16 +225,18 @@ export default {
           };
         };
 
+        // Worker name is used for both the worker loader and the log session DO
+        const workerName = `playground-worker-v${version}`;
+
         // Track bundle info and timing for the response
-        // Use an object so executeWorker can read buildTime after the callback executes
-        const state = {
-          bundleInfo: null as BundleInfo | null,
+        const state: WorkerState = {
+          bundleInfo: null,
           buildTime: 0,
         };
 
         // Create the dynamic worker using the Worker Loader binding
-        // The async callback is only invoked if the isolate isn't already warm
-        const worker = env.LOADER.get(`playground-worker-v${version}`, async () => {
+        // The async callback is only invoked if the worker isn't already warm
+        const worker = env.LOADER.get(workerName, async () => {
           // Bundle the worker with esbuild (dependencies are auto-installed from package.json)
           const buildStart = Date.now();
           const { mainModule, modules, wranglerConfig, warnings } = await createWorker({
@@ -155,12 +264,17 @@ export default {
               DEBUG: 'true',
             },
             globalOutbound: null,
+            // Tail worker is global per worker - it sends logs to the LogSession DO
+            tails: [
+              exports.LogTailer({
+                props: { workerName },
+              }),
+            ],
           };
         });
 
         // Execute and return response
-        // state is read after warmup, so buildTime will be populated
-        return executeWorker(worker, state);
+        return executeWorker(worker, state, workerName);
       } catch (error) {
         return buildErrorResponse(error);
       }

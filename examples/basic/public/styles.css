@@ -709,3 +709,50 @@ h1 {
   width: 14px;
   height: 14px;
 }
+
+/* Console output */
+.console-output {
+  background: var(--bg-primary);
+  border-radius: 8px;
+  padding: 12px;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  font-size: 0.813rem;
+  line-height: 1.6;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.console-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.console-line.error {
+  color: var(--error);
+}
+
+.console-line.warning {
+  color: var(--warning);
+}
+
+.console-prefix {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  width: 12px;
+  text-align: center;
+}
+
+.console-line.error .console-prefix {
+  color: var(--error);
+}
+
+.console-line.warning .console-prefix {
+  color: var(--warning);
+}
+
+.console-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}

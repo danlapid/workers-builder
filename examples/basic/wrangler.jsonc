@@ -12,6 +12,12 @@
       "binding": "LOADER"
     }
   ],
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["LogSession"]
+    }
+  ],
   "observability": {
     "enabled": true
   }

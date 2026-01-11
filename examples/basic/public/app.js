@@ -367,7 +367,7 @@ function showError(message, stack) {
 }
 
 function showResult(result) {
-  const { bundleInfo, response, workerError, timing } = result;
+  const { bundleInfo, response, workerError, timing, logs } = result;
 
   let responseBody = response.body;
   try {
@@ -411,8 +411,31 @@ function showResult(result) {
     </div>
   `;
 
+  // Build console section - always show to hint that console is supported
+  const hasLogs = logs && logs.length > 0;
+  const consoleSection = `
+    <div class="output-section">
+      <div class="output-label">Console${hasLogs ? ` (${logs.length} log${logs.length !== 1 ? 's' : ''})` : ''}</div>
+      <div class="console-output">
+        ${
+          hasLogs
+            ? logs
+                .map((log) => {
+                  const levelClass =
+                    log.level === 'error' ? 'error' : log.level === 'warn' ? 'warning' : '';
+                  const prefix = log.level === 'error' ? '✕' : log.level === 'warn' ? '⚠' : '›';
+                  return `<div class="console-line ${levelClass}"><span class="console-prefix">${prefix}</span>${escapeHtml(log.message)}</div>`;
+                })
+                .join('')
+            : '<div class="console-empty">No console output. Use console.log() in your worker to see logs here.</div>'
+        }
+      </div>
+    </div>
+  `;
+
   output.innerHTML = `
     ${responseSection}
+    ${consoleSection}
     ${timingSection}
     
     <div class="output-section">
