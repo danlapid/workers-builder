@@ -1,5 +1,76 @@
 import { createWorker } from 'workers-builder';
-import { handleGitHubImport } from './github';
+import { handleGitHubImport } from './github.js';
+
+interface BundleInfo {
+  mainModule: string;
+  modules: string[];
+  warnings: string[];
+}
+
+// Execute a dynamic worker and return the full response
+async function executeWorker(worker: WorkerStub, bundleInfo: BundleInfo): Promise<Response> {
+  const startTime = Date.now();
+  const testRequest = new Request('https://example.com/', { method: 'GET' });
+
+  let workerResponse: Response;
+  let responseBody: string;
+  let workerError: { message: string; stack?: string } | null = null;
+
+  try {
+    workerResponse = await worker.getEntrypoint().fetch(testRequest);
+    responseBody = await workerResponse.text();
+
+    // Check if the worker returned a 500 error - this often indicates an uncaught exception
+    // The Worker runtime catches exceptions and returns "Internal Server Error"
+    if (workerResponse.status >= 500) {
+      if (responseBody === 'Internal Server Error') {
+        workerError = { message: 'Worker threw an uncaught exception.' };
+      } else if (responseBody) {
+        workerError = { message: responseBody };
+      }
+    }
+  } catch (err) {
+    // Worker execution failed - return this as a runtime error
+    const stack = err instanceof Error ? err.stack : undefined;
+    workerError = {
+      message: err instanceof Error ? err.message : String(err),
+      ...(stack && { stack }),
+    };
+    workerResponse = new Response('Worker execution failed', { status: 500 });
+    responseBody = '';
+  }
+
+  const executionTime = Date.now() - startTime;
+
+  // Get response headers
+  const responseHeaders: Record<string, string> = {};
+  workerResponse.headers.forEach((value, key) => {
+    responseHeaders[key] = value;
+  });
+
+  return Response.json({
+    bundleInfo,
+    response: {
+      status: workerResponse.status,
+      headers: responseHeaders,
+      body: responseBody,
+    },
+    workerError,
+    executionTime,
+  });
+}
+
+// Build a JSON error response
+function buildErrorResponse(error: unknown): Response {
+  console.error('Error running worker:', error);
+  return Response.json(
+    {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+    },
+    { status: 500 }
+  );
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -22,8 +93,6 @@ export default {
           };
         };
 
-        const startTime = Date.now();
-
         // Bundle the worker with esbuild (dependencies are auto-installed from package.json)
         const { mainModule, modules, wranglerConfig, warnings } = await createWorker({
           files,
@@ -31,7 +100,7 @@ export default {
           minify: options?.minify ?? false,
         });
 
-        // Create and run the dynamic worker
+        // Create the dynamic worker using the Worker Loader binding
         const worker = env.LOADER.get(`playground-worker-v${version}`, async () => ({
           mainModule,
           modules: modules as Record<string, string>,
@@ -46,84 +115,14 @@ export default {
           globalOutbound: null,
         }));
 
-        // Execute the worker with a test request
-        const testRequest = new Request('https://example.com/', {
-          method: 'GET',
+        // Execute and return response
+        return executeWorker(worker, {
+          mainModule,
+          modules: Object.keys(modules),
+          warnings: warnings ?? [],
         });
-
-        let workerResponse: Response;
-        let responseBody: string;
-        let workerError: { message: string; stack?: string | undefined } | null = null;
-
-        try {
-          workerResponse = await worker.getEntrypoint().fetch(testRequest);
-          responseBody = await workerResponse.text();
-
-          // Check if the worker returned a 500 error - this often indicates an uncaught exception
-          // The Worker runtime catches exceptions and returns "Internal Server Error"
-          if (workerResponse.status >= 500) {
-            // Try to extract error information from the response
-            if (responseBody === 'Internal Server Error') {
-              workerError = {
-                message: 'Worker threw an uncaught exception.',
-              };
-            } else if (responseBody) {
-              // The response body might contain error details
-              workerError = {
-                message: responseBody,
-              };
-            }
-          }
-        } catch (error) {
-          // Worker execution failed - return this as a runtime error
-          const stack = error instanceof Error ? error.stack : undefined;
-          workerError = {
-            message: error instanceof Error ? error.message : String(error),
-            ...(stack && { stack }),
-          };
-          // Create a synthetic error response
-          workerResponse = new Response('Worker execution failed', { status: 500 });
-          responseBody = '';
-        }
-        const executionTime = Date.now() - startTime;
-
-        // Get response headers
-        const responseHeaders: Record<string, string> = {};
-        workerResponse.headers.forEach((value, key) => {
-          responseHeaders[key] = value;
-        });
-
-        return new Response(
-          JSON.stringify({
-            bundleInfo: {
-              mainModule,
-              modules: Object.keys(modules),
-              warnings,
-            },
-            response: {
-              status: workerResponse.status,
-              headers: responseHeaders,
-              body: responseBody,
-            },
-            workerError,
-            executionTime,
-          }),
-          {
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
       } catch (error) {
-        console.error('Error running worker:', error);
-        return new Response(
-          JSON.stringify({
-            error: error instanceof Error ? error.message : 'Unknown error',
-            stack: error instanceof Error ? error.stack : undefined,
-          }),
-          {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
+        return buildErrorResponse(error);
       }
     }
 

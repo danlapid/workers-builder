@@ -25,20 +25,20 @@ function parseGitHubUrl(urlString: string): {
 
     const parts = url.pathname.split('/').filter(Boolean);
 
-    if (parts.length < 2) {
-      return null;
-    }
-
     const owner = parts[0];
     const repo = parts[1];
+
+    if (!owner || !repo) {
+      return null;
+    }
 
     // Default branch and path
     let branch = 'main';
     let path = '';
 
     // Check if URL includes /tree/branch/path
-    if (parts.length > 2 && parts[2] === 'tree') {
-      branch = parts[3] || 'main';
+    if (parts.length > 3 && parts[2] === 'tree' && parts[3]) {
+      branch = parts[3];
       path = parts.slice(4).join('/');
     }
 
