@@ -1,6 +1,6 @@
 {
   "name": "workers-builder",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Build and bundle Workers at runtime for Cloudflare Worker Loader binding",
   "type": "module",
   "main": "./dist/index.js",
