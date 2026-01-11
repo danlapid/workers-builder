@@ -15,33 +15,30 @@ Just provide your source code and dependencies — no config files needed:
 ```typescript
 import { createWorker } from 'workers-builder';
 
-const { mainModule, modules } = await createWorker({
-  files: {
-    'src/index.ts': `
-      import { Hono } from 'hono';
-      import { cors } from 'hono/cors';
+const worker = env.LOADER.get('my-worker', async () => {
+  const { mainModule, modules } = await createWorker({
+    files: {
+      'src/index.ts': `
+        import { Hono } from 'hono';
+        import { cors } from 'hono/cors';
 
-      const app = new Hono();
-      app.use('*', cors());
-      app.get('/', (c) => c.text('Hello from Hono!'));
-      app.get('/json', (c) => c.json({ message: 'It works!' }));
+        const app = new Hono();
+        app.use('*', cors());
+        app.get('/', (c) => c.text('Hello from Hono!'));
+        app.get('/json', (c) => c.json({ message: 'It works!' }));
 
-      export default app;
-    `,
-    'package.json': JSON.stringify({
-      dependencies: {
-        hono: '^4.0.0'
-      }
-    }),
-  },
+        export default app;
+      `,
+      'package.json': JSON.stringify({
+        dependencies: {
+          hono: '^4.0.0'
+        }
+      }),
+    },
+  });
+
+  return { mainModule, modules, compatibilityDate: '2026-01-01' };
 });
-
-// Use with Worker Loader binding
-const worker = env.LOADER.get('my-worker', async () => ({
-  mainModule,
-  modules,
-  compatibilityDate: '2026-01-01',
-}));
 
 await worker.getEntrypoint().fetch(request);
 ```
@@ -94,32 +91,36 @@ Priority order:
 ### Multiple Dependencies
 
 ```typescript
-const { mainModule, modules } = await createWorker({
-  files: {
-    'src/index.ts': `
-      import { Hono } from 'hono';
-      import { zValidator } from '@hono/zod-validator';
-      import { z } from 'zod';
+const worker = env.LOADER.get('my-worker', async () => {
+  const { mainModule, modules } = await createWorker({
+    files: {
+      'src/index.ts': `
+        import { Hono } from 'hono';
+        import { zValidator } from '@hono/zod-validator';
+        import { z } from 'zod';
 
-      const app = new Hono();
+        const app = new Hono();
 
-      const schema = z.object({ name: z.string() });
+        const schema = z.object({ name: z.string() });
 
-      app.post('/greet', zValidator('json', schema), (c) => {
-        const { name } = c.req.valid('json');
-        return c.json({ message: \`Hello, \${name}!\` });
-      });
+        app.post('/greet', zValidator('json', schema), (c) => {
+          const { name } = c.req.valid('json');
+          return c.json({ message: \`Hello, \${name}!\` });
+        });
 
-      export default app;
-    `,
-    'package.json': JSON.stringify({
-      dependencies: {
-        hono: '^4.0.0',
-        '@hono/zod-validator': '^0.4.0',
-        zod: '^3.23.0'
-      }
-    }),
-  },
+        export default app;
+      `,
+      'package.json': JSON.stringify({
+        dependencies: {
+          hono: '^4.0.0',
+          '@hono/zod-validator': '^0.4.0',
+          zod: '^3.23.0'
+        }
+      }),
+    },
+  });
+
+  return { mainModule, modules, compatibilityDate: '2026-01-01' };
 });
 ```
 
@@ -128,27 +129,29 @@ const { mainModule, modules } = await createWorker({
 For projects that need specific compatibility settings or are migrating from existing Workers:
 
 ```typescript
-const { mainModule, modules, wranglerConfig } = await createWorker({
-  files: {
-    'src/index.ts': `
-      export default {
-        fetch: () => new Response('Hello!')
-      }
-    `,
-    'wrangler.toml': `
-      main = "src/index.ts"
-      compatibility_date = "2026-01-01"
-      compatibility_flags = ["nodejs_compat"]
-    `,
-  },
-});
+const worker = env.LOADER.get('my-worker', async () => {
+  const { mainModule, modules, wranglerConfig } = await createWorker({
+    files: {
+      'src/index.ts': `
+        export default {
+          fetch: () => new Response('Hello!')
+        }
+      `,
+      'wrangler.toml': `
+        main = "src/index.ts"
+        compatibility_date = "2026-01-01"
+        compatibility_flags = ["nodejs_compat"]
+      `,
+    },
+  });
 
-const worker = env.LOADER.get('my-worker', async () => ({
-  mainModule,
-  modules,
-  compatibilityDate: wranglerConfig?.compatibilityDate ?? '2026-01-01',
-  compatibilityFlags: wranglerConfig?.compatibilityFlags,
-}));
+  return {
+    mainModule,
+    modules,
+    compatibilityDate: wranglerConfig?.compatibilityDate ?? '2026-01-01',
+    compatibilityFlags: wranglerConfig?.compatibilityFlags,
+  };
+});
 ```
 
 ### Transform-only Mode
@@ -156,9 +159,13 @@ const worker = env.LOADER.get('my-worker', async () => ({
 Skip bundling to preserve module structure:
 
 ```typescript
-const { mainModule, modules } = await createWorker({
-  files: { /* ... */ },
-  bundle: false,
+const worker = env.LOADER.get('my-worker', async () => {
+  const { mainModule, modules } = await createWorker({
+    files: { /* ... */ },
+    bundle: false,
+  });
+
+  return { mainModule, modules, compatibilityDate: '2026-01-01' };
 });
 ```
 
