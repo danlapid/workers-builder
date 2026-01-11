@@ -367,7 +367,7 @@ function showError(message, stack) {
 }
 
 function showResult(result) {
-  const { bundleInfo, response, workerError, executionTime } = result;
+  const { bundleInfo, response, workerError, timing } = result;
 
   let responseBody = response.body;
   try {
@@ -396,14 +396,29 @@ function showResult(result) {
     `;
   }
 
+  // Build timing section - show all three stages
+  const isColdStart = timing.loadTime > 0;
+  const totalTime = timing.buildTime + timing.loadTime + timing.runTime;
+  const timingSection = `
+    <div class="output-section">
+      <div class="output-label">Timing${isColdStart ? ' (cold)' : ' (warm)'}</div>
+      <div class="output-content">
+        <strong>Build:</strong> ${timing.buildTime}ms<br>
+        <strong>Load:</strong> ${timing.loadTime}ms<br>
+        <strong>Run:</strong> ${timing.runTime}ms<br>
+        <strong>Total:</strong> ${totalTime}ms
+      </div>
+    </div>
+  `;
+
   output.innerHTML = `
     ${responseSection}
+    ${timingSection}
     
     <div class="output-section">
       <div class="output-label">Bundle Info</div>
       <div class="output-content">
         <strong>Main Module:</strong> ${bundleInfo.mainModule}
-        <br><strong>Execution Time:</strong> ${executionTime}ms
       </div>
       <div style="margin-top: 12px">
         <div class="output-label">Modules (${bundleInfo.modules.length})</div>

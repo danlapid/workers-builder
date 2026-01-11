@@ -7,9 +7,30 @@ interface BundleInfo {
   warnings: string[];
 }
 
+interface WorkerState {
+  bundleInfo: BundleInfo | null;
+  buildTime: number;
+}
+
 // Execute a dynamic worker and return the full response
-async function executeWorker(worker: WorkerStub, bundleInfo: BundleInfo): Promise<Response> {
-  const startTime = Date.now();
+// state.buildTime is populated by the callback after warmup completes
+async function executeWorker(worker: WorkerStub, state: WorkerState): Promise<Response> {
+  // Measure load time by calling a non-existent method
+  // This triggers the cold start (build + load) but fails fast
+  const entrypoint = worker.getEntrypoint() as Fetcher & { __warmup__: () => Promise<void> };
+  const loadStart = Date.now();
+  try {
+    await entrypoint.__warmup__();
+  } catch {
+    // Expected to fail - method doesn't exist
+  }
+  const loadTime = Date.now() - loadStart;
+
+  // After warmup, state.buildTime and state.bundleInfo are populated
+  const { buildTime, bundleInfo } = state;
+
+  // Now measure actual execution time
+  const runStart = Date.now();
   const testRequest = new Request('https://example.com/', { method: 'GET' });
 
   let workerResponse: Response;
@@ -17,7 +38,7 @@ async function executeWorker(worker: WorkerStub, bundleInfo: BundleInfo): Promis
   let workerError: { message: string; stack?: string } | null = null;
 
   try {
-    workerResponse = await worker.getEntrypoint().fetch(testRequest);
+    workerResponse = await entrypoint.fetch(testRequest);
     responseBody = await workerResponse.text();
 
     // Check if the worker returned a 500 error - this often indicates an uncaught exception
@@ -40,7 +61,7 @@ async function executeWorker(worker: WorkerStub, bundleInfo: BundleInfo): Promis
     responseBody = '';
   }
 
-  const executionTime = Date.now() - startTime;
+  const runTime = Date.now() - runStart;
 
   // Get response headers
   const responseHeaders: Record<string, string> = {};
@@ -49,14 +70,18 @@ async function executeWorker(worker: WorkerStub, bundleInfo: BundleInfo): Promis
   });
 
   return Response.json({
-    bundleInfo,
+    bundleInfo: bundleInfo ?? { mainModule: '(cached)', modules: [], warnings: [] },
     response: {
       status: workerResponse.status,
       headers: responseHeaders,
       body: responseBody,
     },
     workerError,
-    executionTime,
+    timing: {
+      buildTime,
+      loadTime,
+      runTime,
+    },
   });
 }
 
@@ -93,20 +118,26 @@ export default {
           };
         };
 
-        // Track bundle info for the response
-        let bundleInfo: BundleInfo | null = null;
+        // Track bundle info and timing for the response
+        // Use an object so executeWorker can read buildTime after the callback executes
+        const state = {
+          bundleInfo: null as BundleInfo | null,
+          buildTime: 0,
+        };
 
         // Create the dynamic worker using the Worker Loader binding
         // The async callback is only invoked if the isolate isn't already warm
         const worker = env.LOADER.get(`playground-worker-v${version}`, async () => {
           // Bundle the worker with esbuild (dependencies are auto-installed from package.json)
+          const buildStart = Date.now();
           const { mainModule, modules, wranglerConfig, warnings } = await createWorker({
             files,
             bundle: options?.bundle ?? true,
             minify: options?.minify ?? false,
           });
+          state.buildTime = Date.now() - buildStart;
 
-          bundleInfo = {
+          state.bundleInfo = {
             mainModule,
             modules: Object.keys(modules),
             warnings: warnings ?? [],
@@ -128,11 +159,8 @@ export default {
         });
 
         // Execute and return response
-        // If bundleInfo is null, the isolate was already warm (cached)
-        return executeWorker(
-          worker,
-          bundleInfo ?? { mainModule: '(cached)', modules: [], warnings: [] }
-        );
+        // state is read after warmup, so buildTime will be populated
+        return executeWorker(worker, state);
       } catch (error) {
         return buildErrorResponse(error);
       }
