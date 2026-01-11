@@ -4,8 +4,15 @@
   "description": "Build and bundle Workers at runtime for Cloudflare Worker Loader binding",
   "repository": {
     "type": "git",
-    "url": "https://github.com/danlapid/workers-builder"
+    "url": "git+https://github.com/danlapid/workers-builder.git",
+    "directory": "packages/workers-builder"
   },
+  "author": "danlapid",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/danlapid/workers-builder/issues"
+  },
+  "homepage": "https://github.com/danlapid/workers-builder/tree/main/packages/workers-builder#readme",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
