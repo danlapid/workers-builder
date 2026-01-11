@@ -265,14 +265,14 @@ describe('createWorker', () => {
           'src/index.ts': 'export default { fetch: () => new Response("ok") };',
           'wrangler.toml': `
 name = "my-worker"
-compatibility_date = "2024-01-01"
+compatibility_date = "2026-01-01"
 compatibility_flags = ["nodejs_compat", "streams_enable_constructors"]
           `,
         },
         bundle: false,
       });
 
-      expect(result.wranglerConfig?.compatibilityDate).toBe('2024-01-01');
+      expect(result.wranglerConfig?.compatibilityDate).toBe('2026-01-01');
       expect(result.wranglerConfig?.compatibilityFlags).toEqual([
         'nodejs_compat',
         'streams_enable_constructors',
@@ -285,14 +285,14 @@ compatibility_flags = ["nodejs_compat", "streams_enable_constructors"]
           'src/index.ts': 'export default { fetch: () => new Response("ok") };',
           'wrangler.json': JSON.stringify({
             name: 'my-worker',
-            compatibility_date: '2024-02-01',
+            compatibility_date: '2026-02-01',
             compatibility_flags: ['nodejs_compat'],
           }),
         },
         bundle: false,
       });
 
-      expect(result.wranglerConfig?.compatibilityDate).toBe('2024-02-01');
+      expect(result.wranglerConfig?.compatibilityDate).toBe('2026-02-01');
       expect(result.wranglerConfig?.compatibilityFlags).toEqual(['nodejs_compat']);
     });
 
@@ -303,7 +303,7 @@ compatibility_flags = ["nodejs_compat", "streams_enable_constructors"]
           'wrangler.jsonc': `{
             // This is a comment
             "name": "my-worker",
-            "compatibility_date": "2024-03-01",
+            "compatibility_date": "2026-03-01",
             /* Multi-line
                comment */
             "compatibility_flags": ["nodejs_compat"]
@@ -312,7 +312,7 @@ compatibility_flags = ["nodejs_compat", "streams_enable_constructors"]
         bundle: false,
       });
 
-      expect(result.wranglerConfig?.compatibilityDate).toBe('2024-03-01');
+      expect(result.wranglerConfig?.compatibilityDate).toBe('2026-03-01');
       expect(result.wranglerConfig?.compatibilityFlags).toEqual(['nodejs_compat']);
     });
 
@@ -322,14 +322,14 @@ compatibility_flags = ["nodejs_compat", "streams_enable_constructors"]
           'src/index.ts': 'export default { fetch: () => new Response("ok") };',
           'wrangler.json': JSON.stringify({
             name: 'my-worker',
-            compatibilityDate: '2024-04-01',
+            compatibilityDate: '2026-04-01',
             compatibilityFlags: ['nodejs_compat'],
           }),
         },
         bundle: false,
       });
 
-      expect(result.wranglerConfig?.compatibilityDate).toBe('2024-04-01');
+      expect(result.wranglerConfig?.compatibilityDate).toBe('2026-04-01');
       expect(result.wranglerConfig?.compatibilityFlags).toEqual(['nodejs_compat']);
     });
 
@@ -360,13 +360,13 @@ compatibility_flags = ["nodejs_compat", "streams_enable_constructors"]
       const result = await createWorker({
         files: {
           'src/index.ts': 'export default { fetch: () => new Response("ok") };',
-          'wrangler.toml': `compatibility_date = "2024-01-01"`,
-          'wrangler.json': JSON.stringify({ compatibility_date: '2024-02-01' }),
+          'wrangler.toml': `compatibility_date = "2026-01-01"`,
+          'wrangler.json': JSON.stringify({ compatibility_date: '2026-02-01' }),
         },
         bundle: false,
       });
 
-      expect(result.wranglerConfig?.compatibilityDate).toBe('2024-01-01');
+      expect(result.wranglerConfig?.compatibilityDate).toBe('2026-01-01');
     });
 
     it('should use wrangler main field as entry point', async () => {

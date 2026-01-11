@@ -42,7 +42,7 @@ export default {
           mainModule,
           modules: modules as Record<string, string>,
           // Use wranglerConfig if available, otherwise use defaults
-          compatibilityDate: wranglerConfig?.compatibilityDate ?? '2024-01-01',
+          compatibilityDate: wranglerConfig?.compatibilityDate ?? '2026-01-01',
           compatibilityFlags: wranglerConfig?.compatibilityFlags ?? [],
           env: {
             // Pass some example env vars
