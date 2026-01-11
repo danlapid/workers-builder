@@ -1,7 +1,6 @@
-import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
+import { DurableObject, exports, RpcTarget, WorkerEntrypoint } from 'cloudflare:workers';
 import { createWorker } from 'workers-builder';
 import { handleGitHubImport } from './github.js';
-import { exports } from 'cloudflare:workers';
 
 // Log entry from a tail event
 interface LogEntry {
@@ -10,61 +9,55 @@ interface LogEntry {
   timestamp: number;
 }
 
+// RPC-compatible object that holds log waiter state
+class LogWaiter extends RpcTarget {
+  private logs: LogEntry[] = [];
+  private resolve: ((logs: LogEntry[]) => void) | undefined = undefined;
+
+  addLogs(logs: LogEntry[]) {
+    this.logs.push(...logs);
+    if (this.resolve) {
+      this.resolve(this.logs);
+      this.resolve = undefined;
+    }
+  }
+
+  async getLogs(timeoutMs: number): Promise<LogEntry[]> {
+    // If logs already arrived, return them immediately
+    if (this.logs.length > 0) {
+      return this.logs;
+    }
+
+    // Wait for logs to arrive with timeout
+    return new Promise<LogEntry[]>((resolve) => {
+      const timeout = setTimeout(() => {
+        resolve(this.logs);
+      }, timeoutMs);
+
+      this.resolve = (logs) => {
+        clearTimeout(timeout);
+        resolve(logs);
+      };
+    });
+  }
+}
+
 // Durable Object that stores logs for a specific worker
 export class LogSession extends DurableObject {
-  private logs: LogEntry[] = [];
-  private waiter: { resolve: (logs: LogEntry[]) => void; since: number } | null = null;
+  private waiter: LogWaiter | null = null;
 
   // Called by the tail worker to add logs
   async addLogs(logs: LogEntry[]) {
-    this.logs.push(...logs);
-
-    // If someone is waiting for logs and we have logs since their subscription time, resolve
     if (this.waiter) {
-      const logsSinceSubscription = this.logs.filter((log) => log.timestamp >= this.waiter!.since);
-      if (logsSinceSubscription.length > 0) {
-        this.waiter.resolve(logsSinceSubscription);
-        this.waiter = null;
-      }
-    }
-
-    // Limit log buffer size to prevent unbounded growth
-    const maxLogs = 1000;
-    if (this.logs.length > maxLogs) {
-      this.logs = this.logs.slice(-maxLogs);
+      this.waiter.addLogs(logs);
     }
   }
 
-  // Called by the main handler to subscribe for logs
-  // Returns the subscription timestamp to use with getLogs
-  async subscribe(): Promise<number> {
-    return Date.now();
-  }
-
-  // Called by the main handler to get logs since subscription time
-  // Waits up to timeoutMs for logs to arrive
-  async getLogs(since: number, timeoutMs: number = 1000): Promise<LogEntry[]> {
-    // Check if we already have logs since the subscription time
-    const existing = this.logs.filter((log) => log.timestamp >= since);
-    if (existing.length > 0) {
-      return existing;
-    }
-
-    // Wait for logs to arrive
-    return new Promise<LogEntry[]>((resolve) => {
-      const timeout = setTimeout(() => {
-        this.waiter = null;
-        resolve([]);
-      }, timeoutMs);
-
-      this.waiter = {
-        since,
-        resolve: (logs) => {
-          clearTimeout(timeout);
-          resolve(logs);
-        },
-      };
-    });
+  // Called by the main handler to set up log collection
+  // Returns a LogWaiter that can be used to get logs later
+  async waitForLogs(): Promise<LogWaiter> {
+    this.waiter = new LogWaiter();
+    return this.waiter;
   }
 }
 
@@ -128,9 +121,9 @@ async function executeWorker(
   // After warmup, state.buildTime and state.bundleInfo are populated
   const { buildTime, bundleInfo } = state;
 
-  // Subscribe to logs AFTER warmup so we don't get warmup logs
+  // Start collecting logs AFTER warmup so we don't get warmup logs
   const logSessionStub = exports.LogSession.getByName(workerName);
-  const subscriptionTime = await logSessionStub.subscribe();
+  const logWaiter = await logSessionStub.waitForLogs();
 
   // Now measure actual execution time
   const runStart = Date.now();
@@ -166,8 +159,8 @@ async function executeWorker(
 
   const runTime = Date.now() - runStart;
 
-  // Fetch logs from the Durable Object (wait up to 1 second for tail event)
-  const logs = await logSessionStub.getLogs(subscriptionTime, 1000);
+  // Wait for logs with a 1 second timeout after fetch completes
+  const logs = await logWaiter.getLogs(1000);
 
   // Get response headers
   const responseHeaders: Record<string, string> = {};
