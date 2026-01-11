@@ -50,6 +50,7 @@ await worker.getEntrypoint().fetch(request);
 | `externals` | `string[]` | `[]` | Additional modules to exclude (`cloudflare:*` always excluded) |
 | `minify` | `boolean` | `false` | Minify output |
 | `sourcemap` | `boolean` | `false` | Generate inline source maps |
+| `registry` | `string` | `'https://registry.npmjs.org'` | npm registry URL |
 
 ### Returns
 
@@ -118,6 +119,10 @@ interface Env {
   LOADER: WorkerLoader;
 }
 ```
+
+## Future Work
+
+- **Lockfile support**: Read `package-lock.json` / `pnpm-lock.yaml` for deterministic installs
 
 ## License
 

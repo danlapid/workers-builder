@@ -5,6 +5,7 @@
  * a virtual node_modules directory structure.
  */
 
+import * as semver from 'semver';
 import type { Files } from './types.js';
 
 const NPM_REGISTRY = 'https://registry.npmjs.org';
@@ -259,54 +260,11 @@ function resolveVersion(range: string, metadata: NpmPackageMetadata): string | u
     return metadata['dist-tags'][range];
   }
 
-  // For ranges like ^1.0.0, ~1.0.0, >=1.0.0, we need to find the best match
-  // Simple implementation: find the highest version that starts with the major version
+  // Use semver.maxSatisfying to find the best matching version
   const versions = Object.keys(metadata.versions);
+  const match = semver.maxSatisfying(versions, range);
 
-  // Parse the range to extract constraints
-  const cleanRange = range.replace(/^[\^~>=<]+/, '');
-  const [majorStr] = cleanRange.split('.');
-  const major = parseInt(majorStr ?? '0', 10);
-
-  // Filter versions that match the major version (for ^ ranges)
-  // This is a simplified semver matching - in production you'd use a proper semver library
-  if (range.startsWith('^') || range.startsWith('~')) {
-    const matchingVersions = versions
-      .filter((v) => {
-        const [vMajor] = v.split('.');
-        return parseInt(vMajor ?? '0', 10) === major;
-      })
-      .sort(compareVersions)
-      .reverse();
-
-    return matchingVersions[0];
-  }
-
-  // For >= ranges, get the latest
-  if (range.startsWith('>=')) {
-    return metadata['dist-tags']['latest'];
-  }
-
-  // Fallback: try to find any version that might work
-  const sortedVersions = versions.sort(compareVersions).reverse();
-  return sortedVersions[0];
-}
-
-/**
- * Compare two semver versions.
- */
-function compareVersions(a: string, b: string): number {
-  const aParts = a.split('.').map((p) => parseInt(p.replace(/[^0-9]/g, ''), 10) || 0);
-  const bParts = b.split('.').map((p) => parseInt(p.replace(/[^0-9]/g, ''), 10) || 0);
-
-  for (let i = 0; i < 3; i++) {
-    const aVal = aParts[i] ?? 0;
-    const bVal = bParts[i] ?? 0;
-    if (aVal !== bVal) {
-      return aVal - bVal;
-    }
-  }
-  return 0;
+  return match ?? undefined;
 }
 
 /**

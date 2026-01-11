@@ -67,6 +67,12 @@ export interface CreateWorkerOptions {
    * @default false
    */
   sourcemap?: boolean;
+
+  /**
+   * npm registry URL for fetching packages.
+   * @default 'https://registry.npmjs.org'
+   */
+  registry?: string;
 }
 
 /**

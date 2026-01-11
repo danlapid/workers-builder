@@ -41,6 +41,7 @@ export async function createWorker(options: CreateWorkerOptions): Promise<Create
     target = 'es2022',
     minify = false,
     sourcemap = false,
+    registry,
   } = options;
 
   // Always treat cloudflare:* modules as external (runtime-provided)
@@ -53,7 +54,7 @@ export async function createWorker(options: CreateWorkerOptions): Promise<Create
   // Auto-install dependencies if package.json has dependencies
   const installWarnings: string[] = [];
   if (hasDependencies(files)) {
-    const installResult = await installDependencies(files);
+    const installResult = await installDependencies(files, registry ? { registry } : {});
     files = installResult.files;
     installWarnings.push(...installResult.warnings);
   }

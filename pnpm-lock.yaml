@@ -51,12 +51,18 @@ importers:
 
   packages/dynamic-worker-bundler:
     dependencies:
+      es-module-lexer:
+        specifier: ^2.0.0
+        version: 2.0.0
       esbuild-wasm:
         specifier: ^0.27.0
         version: 0.27.2
       resolve.exports:
         specifier: ^2.0.0
         version: 2.0.3
+      semver:
+        specifier: ^7.0.0
+        version: 7.7.3
       smol-toml:
         specifier: ^1.0.0
         version: 1.6.0
@@ -67,6 +73,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 25.0.6
+      '@types/semver':
+        specifier: ^7.0.0
+        version: 7.7.1
       esbuild:
         specifier: ^0.27.0
         version: 0.27.2
@@ -889,6 +898,9 @@ packages:
   '@types/node@25.0.6':
     resolution: {integrity: sha512-NNu0sjyNxpoiW3YuVFfNz7mxSQ+S4X2G28uqg2s+CzoqoQjLPsWSbsFFyztIAqt2vb8kfEAsJNepMGPTxFDx3Q==}
 
+  '@types/semver@7.7.1':
+    resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
+
   '@vitest/expect@3.2.0':
     resolution: {integrity: sha512-0v4YVbhDKX3SKoy0PHWXpKhj44w+3zZkIoVES9Ex2pq+u6+Bijijbi2ua5kE+h3qT6LBWFTNZSCOEU37H8Y5sA==}
 
@@ -1061,6 +1073,9 @@ packages:
 
   es-module-lexer@1.7.0:
     resolution: {integrity: sha512-jEQoCwk8hyb2AZziIOLhDqpm5+2ww5uIE6lkO/6jcOCusfk6LhMHpXXfBLXTZ7Ydyt0j4VoUQv6uGNYbdW+kBA==}
+
+  es-module-lexer@2.0.0:
+    resolution: {integrity: sha512-5POEcUuZybH7IdmGsD8wlf0AI55wMecM9rVBTI/qEAy2c1kTOm3DjFYjrBdI2K3BaJjJYfYFeRtM0t9ssnRuxw==}
 
   esbuild-wasm@0.27.2:
     resolution: {integrity: sha512-eUTnl8eh+v8UZIZh4MrMOKDAc8Lm7+NqP3pyuTORGFY1s/o9WoiJgKnwXy+te2J3hX7iRbFSHEyig7GsPeeJyw==}
@@ -2282,6 +2297,8 @@ snapshots:
     dependencies:
       undici-types: 7.16.0
 
+  '@types/semver@7.7.1': {}
+
   '@vitest/expect@3.2.0':
     dependencies:
       '@types/chai': 5.2.3
@@ -2431,6 +2448,8 @@ snapshots:
   error-stack-parser-es@1.0.5: {}
 
   es-module-lexer@1.7.0: {}
+
+  es-module-lexer@2.0.0: {}
 
   esbuild-wasm@0.27.2: {}
 

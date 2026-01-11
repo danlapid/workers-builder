@@ -1,3 +1,5 @@
+// Use the asm.js version to avoid WASM (works in workerd)
+import { parse } from 'es-module-lexer/js';
 import * as resolveExports from 'resolve.exports';
 import type { Files } from './types.js';
 
@@ -282,10 +284,36 @@ function normalizeRelativePath(path: string): string {
 /**
  * Parse imports from a JavaScript/TypeScript source file.
  *
- * This is a simple regex-based parser that handles common import patterns.
- * It doesn't handle all edge cases but works for most practical use cases.
+ * Uses es-module-lexer for accurate parsing of ES module syntax.
+ * Falls back to regex for JSX files since es-module-lexer doesn't
+ * handle JSX syntax (e.g., `<div>` is not valid JavaScript).
  */
 export function parseImports(code: string): string[] {
+  try {
+    const [imports] = parse(code);
+    const specifiers: string[] = [];
+
+    for (const imp of imports) {
+      // imp.n is the resolved module specifier (handles escape sequences)
+      // imp.n is undefined for dynamic imports with non-string arguments
+      if (imp.n !== undefined) {
+        specifiers.push(imp.n);
+      }
+    }
+
+    return [...new Set(specifiers)]; // Deduplicate
+  } catch {
+    // es-module-lexer fails on JSX syntax (<Component />) and malformed code
+    // Fall back to regex-based parsing
+    return parseImportsRegex(code);
+  }
+}
+
+/**
+ * Regex-based fallback for parsing imports.
+ * Used when es-module-lexer fails (e.g., on JSX/TSX files).
+ */
+function parseImportsRegex(code: string): string[] {
   const imports: string[] = [];
 
   // Match ES module imports
