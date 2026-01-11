@@ -1,5 +1,11 @@
 # workers-builder
 
+## 0.1.1
+
+### Patch Changes
+
+- [`3b6c091`](https://github.com/danlapid/workers-builder/commit/3b6c0918ca993ae9ca3d9a21f01ea5662882233f) Thanks [@danlapid](https://github.com/danlapid)! - Initial version
+
 ## 0.1.0
 
 ### Minor Changes
